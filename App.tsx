@@ -3,10 +3,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, AuthContext } from './app/context/AuthContext'; 
 
-// Import hai luồng chính
 import AuthStack from './app/navigation/AuthStack'; 
 import AppNavigator from './app/navigation/AppNavigator';
-import LoadingScreen from './app/screens/LoadingScreen'; // File AppNavigator của bạn
+import LoadingScreen from './app/screens/LoadingScreen'; 
+import { ThemeProvider } from './app/theme/themeContext';
 
 const RootStack = createNativeStackNavigator();
 
@@ -35,14 +35,16 @@ if (isAuthLoading) {
 // Component App chính
 const App = () => {
   return (
-    // 1. Bọc bằng AuthProvider
-    <AuthProvider>
-      {/* 2. Bọc bằng NavigationContainer */}
-      <NavigationContainer>
-        {/* 3. Hiển thị Bộ điều hướng gốc */}
-        <RootNavigator />
-      </NavigationContainer>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        {/* 2. Bọc bằng NavigationContainer */}
+        <NavigationContainer>
+          {/* 3. Hiển thị Bộ điều hướng gốc */}
+          <RootNavigator />
+        </NavigationContainer>
+      </AuthProvider>
+    </ThemeProvider>
+    
   );
 };
 

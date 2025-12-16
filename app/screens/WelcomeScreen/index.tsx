@@ -22,7 +22,7 @@ const WelcomeScreen = ({ navigation} : any) => {
         </TouchableOpacity>
         
         <TouchableOpacity 
-          style={styles.registerButton}
+          style={styles.registerButton} 
           onPress={() => navigation.navigate('Register')}
         >
           <Text style={styles.registerButtonText}>Tạo tài khoản mới</Text>

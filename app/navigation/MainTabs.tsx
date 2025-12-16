@@ -14,9 +14,13 @@ import OverviewScreen from '../screens/OverviewScreen';
 import CategoryDetailScreen from '../screens/CategoryDetailScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 
+// 1. Import Hook Theme
+import { useTheme } from '../theme/themeContext'; // Đảm bảo đúng đường dẫn file ThemeContext
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// ... (Giữ nguyên các hàm HomeStack, CalendarStack, AddTransactionStack) ...
 // Stack cho tab Tổng quan
 function HomeStack() {
   return (
@@ -48,33 +52,37 @@ function CalendarStack() {
 // Stack cho tab Ghi chép GD (AddTransaction + ImageInput)
 function AddTransactionStack() {
   return (
-    <Stack.Navigator 
-      screenOptions={{ 
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen 
-        name="AddTransactionScreen" 
-        component={AddTransactionScreen}
-      />
-      <Stack.Screen 
-        name="ImageInput" 
-        component={ImageInputScreen}
-      />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="AddTransactionScreen" component={AddTransactionScreen} />
+      <Stack.Screen name="ImageInput" component={ImageInputScreen} />
     </Stack.Navigator>
   );
 }
 
-// Component chứa bộ Tab chính
+// --- Component MainTabs (ĐÃ SỬA) ---
 function MainTabs() {
+  // 2. Lấy bộ màu từ Theme
+  const { colors, isDarkMode } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: '#FF69B4',
-        tabBarInactiveTintColor: '#666',
-        tabBarLabelStyle: styles.tabLabel,
+        // 3. Cập nhật Style động theo màu Theme
+        tabBarStyle: {
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 8,
+          borderTopWidth: 1,
+          backgroundColor: colors.surface, // ✅ Nền Tab đổi màu (Trắng/Đen xám)
+          borderTopColor: colors.border,   // ✅ Viền trên đổi màu
+        },
+        tabBarActiveTintColor: colors.primary, // ✅ Màu icon khi chọn (Hồng)
+        tabBarInactiveTintColor: colors.textSecondary, // ✅ Màu icon khi chưa chọn
+        tabBarLabelStyle: {
+          fontSize: 11,
+          marginTop: 4,
+        },
       }}
     >
       {/* Tab Tổng quan */}
@@ -101,14 +109,19 @@ function MainTabs() {
         }}
       />
 
-      {/* Tab Ghi chép GD (nút giữa) */}
+      {/* Tab Nhập (Nút giữa nổi lên) */}
       <Tab.Screen
         name="AddTransactionTab"
         component={AddTransactionStack}
         options={{
-          tabBarLabel: '',
+          tabBarLabel: 'Nhập',
+          tabBarStyle: { display: 'none' }, // Ẩn tab bar khi vào màn hình nhập
           tabBarIcon: () => (
-            <View style={styles.addButton}>
+            <View style={[
+                styles.addButton, 
+                // ✅ Đổi màu nút giữa (nếu muốn nó tối đi khi Dark mode, hoặc giữ nguyên màu hồng)
+                { backgroundColor: colors.primary, shadowColor: colors.primary } 
+            ]}>
               <Icon name="plus" size={30} color="#fff" />
             </View>
           ),
@@ -142,29 +155,16 @@ function MainTabs() {
   );
 }
 
-// --- Styles cho Tab ---
+// --- Styles tĩnh (Chỉ giữ lại những cái không đổi màu) ---
 const styles = StyleSheet.create({
-  tabBar: {
-    height: 70,
-    paddingBottom: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
-  },
-  tabLabel: {
-    fontSize: 11,
-    marginTop: 4,
-  },
   addButton: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FF69B4',
+    // backgroundColor và shadowColor đã chuyển vào inline style ở trên để dùng Theme
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: -28,
-    shadowColor: '#FF69B4',
     shadowOffset: {
       width: 0,
       height: 4,

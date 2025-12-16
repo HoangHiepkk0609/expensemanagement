@@ -10,9 +10,10 @@ import {
   Platform,
   Alert,
   Dimensions,
+  Modal,
 } from 'react-native';
-import { ArrowLeft, Calendar, ChevronDown } from 'lucide-react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // ✅ THÊM IMPORT
+import { Calendar, ChevronDown } from 'lucide-react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Picker } from '@react-native-picker/picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import firestore from '@react-native-firebase/firestore';
@@ -22,26 +23,39 @@ type Category = { id: string; name: string; icon: string; };
 type Source = { id: string; name: string; icon: string; };
 type Props = NativeStackScreenProps<RootStackParamList, 'TransactionEdit'>;
 
-// ✅ SỬA ICON DANH MỤC
-  const expenseCategories: Category[] = [
-    { id: 'food', name: 'Ăn uống', icon: 'food-fork-drink' },
-    { id: 'shopping', name: 'Mua sắm', icon: 'cart' },
-    { id: 'friend', name: 'Người thân', icon: 'human-greeting' },
-    { id: 'other', name: 'Khác', icon: 'dots-grid' }
-  ];
+// ✅ DANH MỤC VỚI ICON ĐÚNG
+const expenseCategories: Category[] = [
+  { id: 'food', name: 'Ăn uống', icon: 'food-fork-drink' },
+  { id: 'shopping', name: 'Mua sắm', icon: 'cart' },
+  { id: 'transport', name: 'Di chuyển', icon: 'car' },
+  { id: 'friend', name: 'Người thân', icon: 'account-group' },
+  { id: 'other', name: 'Khác', icon: 'dots-grid' }
+];
 
-  const incomeCategories: Category[] = [
-  { id: 'salary', name: 'Lương', icon: 'cash-marker' },
+const incomeCategories: Category[] = [
+  { id: 'salary', name: 'Lương', icon: 'cash' },
   { id: 'business', name: 'Kinh doanh', icon: 'chart-line' },
-  { id: 'bonus', name: 'Thưởng', icon: 'wallet-giftcard' },
+  { id: 'bonus', name: 'Thưởng', icon: 'gift' },
   { id: 'other_income', name: 'Khác', icon: 'dots-grid' },
-  ];
+];
 
-  const sources: Source[] = [
-    { id: 'momo', name: 'Ngoài MoMo', icon: '💳' },
-    { id: 'cash', name: 'Tiền mặt', icon: '💵' },
-    { id: 'bank', name: 'Ngân hàng', icon: '🏦' }
-  ];
+const sources: Source[] = [
+  { id: 'momo', name: 'Ngoài MoMo', icon: '💳' },
+  { id: 'cash', name: 'Tiền mặt', icon: '💵' },
+  { id: 'bank', name: 'Ngân hàng', icon: '🏦' }
+];
+
+// ✅ MÀU DANH MỤC
+const categoryColors: any = {
+  'Ăn uống': '#FF6B6B',
+  'Mua sắm': '#FFD93D',
+  'Di chuyển': '#6BCB77',
+  'Người thân': '#4D96FF',
+  'Khác': '#9D9D9D',
+  'Lương': '#4CAF50',
+  'Kinh doanh': '#2196F3',
+  'Thưởng': '#FFC107',
+};
 
 const TransactionEditScreen = ({ route, navigation }: Props) => {
   const { transaction } = route.params;
@@ -82,22 +96,18 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
   });
 
   const [showNotification, setShowNotification] = useState(false);
-
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [categoriesToShow, setCategoriesToShow] = useState<Category[]>(expenseCategories);
 
-  // ✅ THÊM useEffect NÀY VÀO
   useEffect(() => {
-    // Lấy 'type' từ giao dịch đang sửa
-    const type = transaction.type || 'expense'; 
-
+    const type = transaction.type || 'expense';
     if (type === 'income') {
       setCategoriesToShow(incomeCategories);
     } else {
       setCategoriesToShow(expenseCategories);
     }
-  }, [transaction]); // Chạy lại khi 'transaction' thay đổi
-
-  
+  }, [transaction]);
 
   const handleSaveEdit = async () => {
     const amountAsNumber = parseFloat(editData.amount.replace(/\./g, ''));
@@ -156,61 +166,142 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <View style={styles.headerRightIcons} />
-      </View>
-
-      <ScrollView style={styles.content}>
+    <View style={styles.safeArea}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           {/* Số tiền */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>
               Số tiền<Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
-              style={styles.inputAmount}
-              value={formatAmountInput(editData.amount)}
-              onChangeText={(text) => setEditData({ ...editData, amount: text.replace(/\./g, '') })}
-              placeholder="0"
-              keyboardType="numeric"
-            />
-            <Text style={styles.currencySymbol}>₫</Text>
+            <View style={styles.amountInputWrapper}>
+              <TextInput
+                style={styles.inputAmount}
+                value={formatAmountInput(editData.amount)}
+                onChangeText={(text) => setEditData({ ...editData, amount: text.replace(/\./g, '') })}
+                placeholder="0"
+                keyboardType="numeric"
+              />
+              <Text style={styles.currencySymbol}>₫</Text>
+            </View>
           </View>
 
-          {/* Danh mục - ✅ SỬA PHẦN RENDER ICON */}
+          {/* ✅ DANH MỤC - GIỐNG ADD SCREEN */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>
               Danh mục<Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.categoryGrid}>
-              {categoriesToShow.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => handleCategorySelect(cat)}
-                  style={[
-                    styles.categoryButton,
-                    editData.category === cat.name ? (transaction.type === 'income' ? styles.categoryButtonActive : styles.categoryButtonActive) 
-                      : null
-                  ]}
-                >
-                  {/* ✅ SỬA: Dùng Icon component thay vì Text emoji */}
+            <View style={styles.categoryContainer}>
+              {categoriesToShow.slice(0, 3).map((cat, index) => {
+                const catColor = categoryColors[cat.name] || '#9D9D9D';
+                const isSelected = editData.category === cat.name;
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => handleCategorySelect(cat)}
+                    style={[
+                      styles.categoryButton,
+                      isSelected && styles.selectedCategory
+                    ]}
+                  >
+                    <View style={[
+                      styles.categoryIconWrapper,
+                      { backgroundColor: catColor + '20' }
+                    ]}>
+                      <Icon
+                        name={cat.icon}
+                        size={24}
+                        color={catColor}
+                      />
+                    </View>
+                    <Text style={styles.categoryText}>{cat.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+              
+              {/* Nút Khác */}
+              <TouchableOpacity
+                style={[
+                  styles.categoryButton,
+                  editData.category && !categoriesToShow.slice(0, 3).find(c => c.name === editData.category) && styles.selectedCategory
+                ]}
+                onPress={() => setShowCategoryModal(true)}
+              >
+                <View style={[
+                  styles.categoryIconWrapper,
+                  { backgroundColor: '#9D9D9D20' }
+                ]}>
                   <Icon
-                    name={cat.icon}
-                    size={28}
-                    color={editData.category === cat.name ? (transaction.type === 'income' ? '#4CAF50' : '#FF69B4') : '#666'}
-                    style={styles.categoryIconStyle}
+                    name="dots-grid"
+                    size={24}
+                    color="#9D9D9D"
                   />
-                  <Text style={[
-                    styles.categoryText,
-                    editData.category === cat.name ? styles.categoryTextActive : styles.categoryTextActive
-                  ]}>
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                </View>
+                <Text style={styles.categoryText}>
+                  {editData.category && !categoriesToShow.slice(0, 3).find(c => c.name === editData.category) ? editData.category : 'Khác'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
+
+          {/* ✅ MODAL CHỌN DANH MỤC */}
+          <Modal
+            visible={showCategoryModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowCategoryModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Chọn danh mục</Text>
+                  <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                    <Icon name="close" size={24} color="#888" />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView>
+                  {categoriesToShow.map((item, index) => {
+                    const catColor = categoryColors[item.name] || '#9D9D9D';
+                    const isSelected = editData.category === item.name;
+                    
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[styles.optionItem, isSelected && styles.selectedOption]}
+                        onPress={() => {
+                          handleCategorySelect(item);
+                          setShowCategoryModal(false);
+                        }}
+                      >
+                        <View style={styles.optionContent}>
+                          <View style={[
+                            styles.optionIconWrapper,
+                            { backgroundColor: catColor + '20' }
+                          ]}>
+                            <Icon
+                              name={item.icon}
+                              size={22}
+                              color={catColor}
+                            />
+                          </View>
+                          <Text style={[
+                            styles.optionText,
+                            isSelected && styles.selectedOptionText
+                          ]}>
+                            {item.name}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Icon name="check" size={20} color={catColor} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           {/* Ngày giao dịch */}
           <View style={styles.formGroup}>
@@ -221,40 +312,72 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
               style={styles.inputWithIcon}
               onPress={() => Alert.alert("Thông báo", "Chức năng chọn ngày chưa được cài đặt.")}
             >
+              <Icon name="calendar-outline" size={20} color="#999" />
               <Text style={styles.inputDate}>
                 {formatDisplayDate(editData.date)}
               </Text>
-              <Calendar style={styles.inputIconRight} size={20} color="#9CA3AF" />
+              <ChevronDown size={20} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
 
-          {/* Nguồn tiền */}
+          {/* ✅ NGUỒN TIỀN - MODAL */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>
               Nguồn tiền<Text style={styles.required}>*</Text>
             </Text>
-
-            <View style={styles.pickerWrapper}>
-              <View style={styles.sourceDisplay}>
-                <Text style={styles.sourceIconText}>{editData.sourceIcon}</Text>
-                <Text style={styles.sourceNameText}>{editData.wallet}</Text>
-                <ChevronDown style={styles.inputIconRight} size={20} color="#9CA3AF" />
-              </View>
-
-              <Picker
-                selectedValue={editData.wallet}
-                onValueChange={(itemValue: string) => {
-                  const selectedSource = sources.find(s => s.name === itemValue);
-                  if (selectedSource) handleSourceSelect(selectedSource);
-                }}
-                style={styles.hiddenPicker}
-              >
-                {sources.map((src) => (
-                  <Picker.Item key={src.id} label={`${src.icon} ${src.name}`} value={src.name} />
-                ))}
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.inputWithIcon}
+              onPress={() => setShowWalletModal(true)}
+            >
+              <Icon name="credit-card" size={20} color="#999" />
+              <Text style={styles.inputDate}>{editData.wallet}</Text>
+              <ChevronDown size={20} color="#9CA3AF" />
+            </TouchableOpacity>
           </View>
+
+          {/* ✅ MODAL NGUỒN TIỀN */}
+          <Modal
+            visible={showWalletModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowWalletModal(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Nguồn tiền</Text>
+                  <TouchableOpacity onPress={() => setShowWalletModal(false)}>
+                    <Icon name="close" size={24} color="#888" />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView>
+                  {sources.map((src, index) => {
+                    const isSelected = editData.wallet === src.name;
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[styles.optionItem, isSelected && styles.selectedOption]}
+                        onPress={() => {
+                          handleSourceSelect(src);
+                          setShowWalletModal(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.optionText,
+                          isSelected && styles.selectedOptionText
+                        ]}>
+                          {src.name}
+                        </Text>
+                        {isSelected && (
+                          <Icon name="check" size={20} color="#FF69B4" />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           {/* Ghi chú */}
           <View style={styles.formGroup}>
@@ -264,265 +387,298 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
               value={editData.note}
               onChangeText={(text) => setEditData({ ...editData, note: text })}
               placeholder="Thêm ghi chú..."
+              placeholderTextColor="#ccc"
+              multiline={true}
             />
           </View>
         </View>
+
+        <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* Nút "Chỉnh sửa" */}
+      {/* Nút Lưu */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-          <Text style={styles.saveButtonText}>Chỉnh sửa</Text>
+        <TouchableOpacity 
+          style={[styles.saveButton, transaction.type === 'income' && styles.saveButtonIncome]} 
+          onPress={handleSaveEdit}
+        >
+          <Icon name="check" size={20} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
         </TouchableOpacity>
       </View>
 
       {/* Notification */}
       {showNotification && (
         <View style={styles.notification}>
-          <Text style={styles.notificationText}>✓ Cập nhật thành công!</Text>
+          <Icon name="check-circle" size={24} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.notificationText}>Cập nhật thành công!</Text>
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
 export default TransactionEditScreen;
 
 const { width: screenWidth } = Dimensions.get('window');
-const cardHorizontalPadding = 24 * 2;
-const screenHorizontalPadding = 16 * 2;
-const gridGap = 12;
-const itemsPerRow = 4;
-const totalGapWidth = gridGap * (itemsPerRow - 1);
-const availableWidth = screenWidth - screenHorizontalPadding - cardHorizontalPadding;
-const categoryButtonWidth = (availableWidth - totalGapWidth) / itemsPerRow;
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f5f7fa',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
+    paddingVertical: 16,
+    backgroundColor: '#fff',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
     elevation: 3,
   },
   backButton: {
+    position: 'absolute',
+    left: 16,
     padding: 8,
-    marginLeft: -8,
+    borderRadius: 8,
+    zIndex: 1,
   },
   headerTitle: {
-    flex: 1,
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1a1a1a',
     textAlign: 'center',
-  },
-  headerRightIcons: {
-    width: 40,
   },
   content: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f5f7fa',
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
     marginBottom: 16,
   },
   footer: {
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#EEE',
+    borderTopColor: '#f0f0f0',
     paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 5,
   },
   formGroup: {
     marginBottom: 24,
   },
   formLabel: {
-    color: '#666',
+    color: '#333',
     fontSize: 14,
-    marginBottom: 8,
-    fontWeight: '500',
+    marginBottom: 10,
+    fontWeight: '700',
   },
   required: {
-    color: '#EF4444',
+    color: '#FF6B6B',
+  },
+  amountInputWrapper: {
+    position: 'relative',
   },
   inputAmount: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
+    borderBottomWidth: 2,
+    borderBottomColor: '#f0f0f0',
+    paddingVertical: 8,
+    paddingHorizontal: 0,
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    backgroundColor: '#F9F9F9',
-    textAlign: 'right',
+    fontWeight: '700',
+    color: '#FF69B4',
+    backgroundColor: '#fff',
+    textAlign: 'left',
   },
   currencySymbol: {
     position: 'absolute',
-    right: 16,
-    top: Platform.OS === 'ios' ? 44 : 48,
-    fontSize: 28,
-    fontWeight: 'bold',
+    right: 0,
+    top: Platform.OS === 'ios' ? 8 : 10,
+    fontSize: 20,
+    fontWeight: '700',
     color: '#999',
   },
-  categoryGrid: {
+  categoryContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    marginTop: 12,
+    gap: 10,
   },
   categoryButton: {
-    width: categoryButtonWidth,
-    aspectRatio: 1,
-    flexDirection: 'column',
+    width: (screenWidth - 32 - 40 - 30) / 4,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#F9F9F9',
+    backgroundColor: '#fafafa',
+    borderWidth: 2,
+    borderColor: '#f0f0f0',
   },
-  categoryButtonActive: {
+  selectedCategory: {
+    backgroundColor: '#fff0f5',
+    borderWidth: 2,
     borderColor: '#FF69B4',
-    backgroundColor: '#FFF0F5',
   },
-  // ✅ THÊM STYLE CHO ICON
-  categoryIconStyle: {
+  categoryIconWrapper: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 4,
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
     textAlign: 'center',
-  },
-  categoryTextActive: {
-    color: '#FF69B4',
-    fontWeight: '600',
+    fontWeight: '500',
+    marginTop: 2,
   },
   inputWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    backgroundColor: '#F9F9F9',
-    paddingHorizontal: 16,
-    height: 50,
+    borderBottomWidth: 2,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    gap: 10,
   },
   inputDate: {
     flex: 1,
     fontSize: 16,
     color: '#333',
-  },
-  inputIconRight: {
-    marginLeft: 10,
-  },
-  pickerWrapper: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    backgroundColor: '#F9F9F9',
-    justifyContent: 'center',
-    position: 'relative',
-    height: 50,
-  },
-  sourceDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    paddingHorizontal: 16,
-    height: '100%',
-  },
-  sourceIconText: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  sourceNameText: {
-    fontSize: 16,
-    color: '#333',
-    flex: 1,
-  },
-  hiddenPicker: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0,
+    fontWeight: '500',
   },
   inputNote: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#f0f0f0',
+    paddingVertical: 12,
+    paddingHorizontal: 0,
     fontSize: 16,
     color: '#333',
-    backgroundColor: '#F9F9F9',
-    minHeight: 80,
+    backgroundColor: '#fff',
+    minHeight: 60,
     textAlignVertical: 'top',
+    fontWeight: '500',
   },
   saveButton: {
     backgroundColor: '#FF69B4',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
     shadowColor: '#FF69B4',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowRadius: 8,
     elevation: 6,
   },
+  saveButtonIncome: {
+    backgroundColor: '#4CAF50',
+    shadowColor: '#4CAF50',
+  },
   saveButtonText: {
-    color: 'white',
-    fontSize: 18,
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '700',
   },
   notification: {
     position: 'absolute',
-    top: 60,
-    left: '10%',
-    right: '10%',
+    top: 80,
+    left: 16,
+    right: 16,
     backgroundColor: '#22C55E',
-    padding: 16,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
     zIndex: 100,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 5,
   },
   notificationText: {
-    color: 'white', 
-    fontSize: 16, 
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '600'
   },
-  categoryButtonActiveIncome: {
-    borderColor: '#4CAF50', // Xanh lá
-    backgroundColor: '#f0fff5',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
   },
-  categoryTextActiveIncome: {
-    color: '#4CAF50', // Xanh lá
-    fontWeight: '600',
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  optionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  selectedOption: {
+    backgroundColor: '#fff0f5',
+  },
+  optionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  optionIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  selectedOptionText: {
+    color: '#FF69B4',
+    fontWeight: '700',
   },
 });

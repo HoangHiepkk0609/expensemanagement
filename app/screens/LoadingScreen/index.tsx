@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet, SafeAreaView } from 'react-native';
-import { COLORS } from '../../theme/colors'; // Import màu của bạn
+import { COLORS } from '../../theme/Colors'; // Import màu của bạn
 
 const LoadingScreen = () => {
   return (

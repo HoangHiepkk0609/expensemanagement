@@ -15,8 +15,9 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import { launchImageLibrary } from 'react-native-image-picker';
-import TextRecognition from '@react-native-ml-kit/text-recognition';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import RNFS from 'react-native-fs';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const { width } = Dimensions.get('window');
 
@@ -27,8 +28,16 @@ const categories = [
   { label: 'Khác', icon: 'dots-grid' },
 ];
 
+const categoryColors: any = {
+  'Ăn uống': '#FF6B6B',
+  'Mua sắm': '#FFD93D',
+  'Di chuyển': '#6BCB77',
+  'Người thân': '#4D96FF',
+  'Khác': '#9D9D9D',
+};
+
 const ImageExtractScreen = ({ navigation, route }: any) => {
-  // ✅ ALL HOOKS AT THE TOP
+  // ✅ State Management
   const [transactionType, setTransactionType] = useState('expense');
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState(categories[0].label);
@@ -40,15 +49,16 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   const TEST_USER_ID = 'my-test-user-id-123';
+  
+  const GEMINI_API_KEY = "AIzaSyCpfAXfGmAvEosiOu5693ZH73NQDVZOGww";
 
-  // ✅ Tự động chọn ảnh và OCR khi autoSelect = true
   useEffect(() => {
     const shouldAutoSelect = route?.params?.autoSelect;
     
     if (shouldAutoSelect) {
-      
       setTimeout(() => {
         handleAutoSelectAndOCR();
       }, 500);
@@ -57,125 +67,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   }, [route?.params?.autoSelect]);
 
-   // ✅ Hàm parse thông tin hóa đơn từ text OCR (phiên bản v2)
-  const parseInvoiceData = (text: string) => {
-    const data = {
-      storeName: '',
-      total: '',
-      date: '',
-    };
-
-    const lines = text.split('\n').filter(line => line.trim());
-
-    // 1. Lấy Tên cửa hàng (cố gắng tìm tên tốt hơn)
-    if (lines.length > 0) {
-      for (let i = 0; i < Math.min(lines.length, 5); i++) {
-        const line = lines[i].trim();
-        // Bỏ qua các dòng địa chỉ, SĐT
-        if (line.length > 3 && !line.toLowerCase().includes('đ/c:') && !line.toLowerCase().includes('tel:') && !line.toLowerCase().includes('sdt:')) {
-          data.storeName = line; // Lấy dòng này làm tên
-          break;
-        }
-      }
-      // Nếu không tìm thấy, quay về cách cũ là lấy dòng 1
-      if (!data.storeName) {
-        data.storeName = lines[0]?.trim() || '';
-      }
-    }
-
-    // 2. Lấy Ngày (Regex của bạn đã tốt)
-    const dateRegex = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/;
-    const dateMatch = text.match(dateRegex);
-    if (dateMatch) {
-      data.date = dateMatch[0]; // Lấy kết quả đầu tiên tìm thấy
-    }
-
-    // --- 3. Lấy Tổng tiền (Cách làm mạnh mẽ hơn v2) ---
-    const totalKeywords = [
-      'thanh toán', // Ưu tiên 1
-      'tổng cộng',   // Ưu tiên 2
-      'total',
-      'tổng',
-      't.ng c.ng',
-      'thanhtoan',
-    ];
-    
-    const amountRegex = /([\d.,]+)/g;
-    
-    // Hàm dọn dẹp số
-    const cleanAmount = (amountStr: string) => {
-      return amountStr.replace(/[^0-9]/g, '');
-    };
-
-    // Hàm tìm số lớn nhất trên 1 dòng
-    const findLargestNumberOnLine = (line: string): string | null => {
-      const numberMatches = line.match(amountRegex);
-      if (!numberMatches) return null;
-
-      let largestNum = 0;
-      for (const match of numberMatches) {
-        const num = parseInt(cleanAmount(match), 10);
-        if (num > largestNum) {
-          largestNum = num;
-        }
-      }
-      return largestNum > 0 ? largestNum.toString() : null;
-    };
-
-    let foundTotal = false;
-    // Đi từ dưới lên trên
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const lineText = lines[i];
-      const lineLower = lineText.toLowerCase();
-
-      for (const keyword of totalKeywords) {
-        if (lineLower.includes(keyword)) {
-          
-          // Case 1: Keyword và số tiền trên CÙNG MỘT DÒNG
-          let total = findLargestNumberOnLine(lineText);
-          if (total) {
-            data.total = total;
-            foundTotal = true;
-            break;
-          }
-
-          // Case 2: Keyword ở dòng này, số tiền ở DÒNG TIẾP THEO
-          if (i + 1 < lines.length) {
-            total = findLargestNumberOnLine(lines[i + 1]);
-            if (total) {
-              data.total = total;
-              foundTotal = true;
-              break;
-            }
-          }
-        }
-      }
-      if (foundTotal) break;
-    }
-    
-    // Case 3: (Dự phòng) Nếu không tìm thấy, tìm số tiền lớn nhất ở 3 dòng cuối
-    if (!foundTotal) {
-      let maxAmount = 0;
-      const startIdx = Math.max(0, lines.length - 3);
-      for (let i = lines.length - 1; i >= startIdx; i--) {
-        const totalStr = findLargestNumberOnLine(lines[i]);
-        if (totalStr) {
-          const totalNum = parseInt(totalStr, 10);
-          if (totalNum > maxAmount) {
-            maxAmount = totalNum;
-          }
-        }
-      }
-      if (maxAmount > 0) {
-        data.total = maxAmount.toString();
-      }
-    }
-    // --- Kết thúc phần lấy Tổng tiền ---
-
-    return data;
-  };
-
-   
   // ✅ Tự động chọn ảnh và OCR
   const handleAutoSelectAndOCR = async () => {
     try {
@@ -198,67 +89,213 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
 
       if (result.assets && result.assets.length > 0 && result.assets[0].uri) {
         setSelectedImages(result.assets);
-
         setIsProcessing(true);
+        setOcrError(null);
         
-        // Thực hiện OCR
-        await performOCR(result.assets[0].uri);
+        const asset = result.assets[0];
+        const success = await performOCR(asset.uri!, asset.type || 'image/jpeg');
         
-        // Hiển thị form sau khi OCR xong
         setShowForm(true);
         setIsProcessing(false);
+
+        // Hiển thị thông báo nếu OCR thất bại
+        if (!success) {
+          Alert.alert(
+            'Thông báo',
+            'Không thể trích xuất thông tin tự động. Vui lòng nhập thủ công.',
+            [{ text: 'OK' }]
+          );
+        }
       } else {
         navigation.goBack();
       }
     } catch (error) {
       console.error('Error:', error);
       Alert.alert('Lỗi', 'Không thể xử lý ảnh');
+      setIsProcessing(false);
       navigation.goBack();
     }
   };
 
-  // ✅ Thực hiện OCR
-  const performOCR = async (imageUri: string) => {
+  // ✅ Validate dữ liệu từ Gemini
+  const validateOCRResponse = (data: any): boolean => {
+    if (!data || typeof data !== 'object') return false;
+    
+    // Kiểm tra có ít nhất 1 trường hợp lệ
+    const hasTotal = data.total && !isNaN(parseFloat(data.total));
+    const hasStore = data.store_name && data.store_name.trim().length > 0;
+    const hasDate = data.date && !isNaN(Date.parse(data.date));
+    
+    return hasTotal || hasStore || hasDate;
+  };
+
+  // ✅ Parse số tiền linh hoạt hơn
+  const parseAmount = (amountStr: string): string => {
+    if (!amountStr) return '';
+    
+    // Loại bỏ tất cả ký tự không phải số
+    const numericValue = amountStr.toString().replace(/[^0-9]/g, '');
+    
+    // Chuyển thành số và validate
+    const parsed = parseInt(numericValue);
+    if (isNaN(parsed) || parsed <= 0) return '';
+    
+    return parsed.toString();
+  };
+
+  // ✅ Parse ngày linh hoạt hơn
+  const parseDate = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    
     try {
-      const result = await TextRecognition.recognize(imageUri);
-      const parsedData = parseInvoiceData(result.text);
-
-      // Tự động điền vào form
-      if (parsedData.total) {
-        setAmount(parsedData.total);
-      }
-
-      if (parsedData.storeName) {
-        setNote(parsedData.storeName);
-      }
-
-      if (parsedData.date) {
-        try {
-          const dateParts = parsedData.date.split(/[\/\-\.]/);
-          if (dateParts.length === 3) {
-            const day = parseInt(dateParts[0]);
-            const month = parseInt(dateParts[1]) - 1;
-            let year = parseInt(dateParts[2]);
-            if (year < 100) year += 2000;
-            
-            const parsedDate = new Date(year, month, day);
-            if (!isNaN(parsedDate.getTime())) {
-              setTransactionDate(parsedDate);
-            }
-          }
-        } catch (error) {
-          console.error('Error parsing date:', error);
-        }
-      }
-
-      console.log('✅ OCR hoàn tất:', parsedData);
-    } catch (error) {
-      console.error('OCR Error:', error);
-      Alert.alert('Cảnh báo', 'Không thể đọc thông tin từ ảnh. Vui lòng nhập thủ công.');
+      const parsed = new Date(dateStr);
+      if (isNaN(parsed.getTime())) return null;
+      
+      // Không cho phép ngày tương lai
+      if (parsed > new Date()) return null;
+      
+      return parsed;
+    } catch {
+      return null;
     }
   };
 
-  // ✅ Chọn ảnh thủ công (khi nhấn nút +)
+  // ✅ Thực hiện OCR với Gemini AI
+  const performOCR = async (imageUri: string, imageType: string): Promise<boolean> => {
+    try {
+      console.log("🔍 Đang gọi Gemini AI...");
+      
+      // 1. Đọc file ảnh thành Base64
+      const base64Data = await RNFS.readFile(imageUri, 'base64');
+
+      // 2. Khởi tạo Gemini - Thử nhiều model
+      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+      
+      // Danh sách model để thử (từ mới nhất đến cũ nhất)
+      const modelsToTry = [
+      
+        "gemini-2.0-flash"
+      ];
+
+      let model;
+      let lastError;
+
+      // Thử từng model cho đến khi thành công
+      for (const modelName of modelsToTry) {
+        try {
+          console.log(`Đang thử model: ${modelName}`);
+          model = genAI.getGenerativeModel({ model: modelName });
+          
+          // Test xem model có hoạt động không
+          const testResult = await model.generateContent(["test"]);
+          await testResult.response;
+          
+          console.log(`✅ Model ${modelName} hoạt động!`);
+          break;
+        } catch (err: any) {
+          console.log(`❌ Model ${modelName} thất bại:`, err.message);
+          lastError = err;
+          continue;
+        }
+      }
+
+      if (!model) {
+        throw new Error(`Không thể kết nối với bất kỳ model Gemini nào. Lỗi cuối: ${lastError?.message}`);
+      }
+
+      // 3. Tạo Prompt chi tiết hơn
+      const prompt = `Bạn là trợ lý trích xuất thông tin hóa đơn. Phân tích ảnh này và trả về JSON:
+
+      {
+        "total": "tổng tiền (chỉ số, không có ký tự đặc biệt)",
+        "store_name": "tên cửa hàng/địa điểm",
+        "date": "ngày giao dịch (format: YYYY-MM-DD)"
+      }
+
+      Lưu ý:
+      - Nếu không tìm thấy thông tin nào, để giá trị null
+      - Total: chỉ lấy số cuối cùng (tổng tiền), bỏ qua thuế và phí
+      - Date: ưu tiên ngày trên hóa đơn, không phải ngày hiện tại
+      - Store_name: tên ngắn gọn, không cần địa chỉ đầy đủ
+
+      Chỉ trả về JSON, không giải thích thêm.`;
+      
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType: imageType,
+        },
+      };
+
+      // 4. Gửi yêu cầu đến Gemini
+      const result = await model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log("📄 Gemini trả về:", text);
+
+      // 5. Parse JSON an toàn
+      const cleanText = text
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
+      
+      const parsedData = JSON.parse(cleanText);
+
+      // 6. Validate dữ liệu
+      if (!validateOCRResponse(parsedData)) {
+        console.warn("⚠️ OCR response không hợp lệ");
+        setOcrError("Không thể đọc thông tin từ hóa đơn");
+        return false;
+      }
+
+      // 7. Điền dữ liệu vào form
+      let hasData = false;
+
+      if (parsedData.total) {
+        const parsedAmount = parseAmount(parsedData.total);
+        if (parsedAmount) {
+          setAmount(parsedAmount);
+          hasData = true;
+        }
+      }
+
+      if (parsedData.store_name && parsedData.store_name.trim()) {
+        setNote(parsedData.store_name.trim());
+        hasData = true;
+      }
+
+      if (parsedData.date) {
+        const parsedDate = parseDate(parsedData.date);
+        if (parsedDate) {
+          setTransactionDate(parsedDate);
+          hasData = true;
+        }
+      }
+
+      console.log("✅ OCR thành công");
+      return hasData;
+
+    } catch (error: any) {
+      console.error('❌ Lỗi Gemini:', error);
+      
+      // Xử lý các loại lỗi khác nhau
+      let errorMessage = 'Không thể xử lý ảnh';
+      
+      if (error.message?.includes('API key')) {
+        errorMessage = 'Lỗi xác thực API';
+      } else if (error.message?.includes('quota')) {
+        errorMessage = 'Đã vượt quá giới hạn sử dụng';
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        errorMessage = 'Lỗi kết nối mạng';
+      }
+      
+      setOcrError(errorMessage);
+      return false;
+    }
+  };
+
+  // ✅ Chọn ảnh thủ công
   const handleSelectImages = async () => {
     try {
       const result = await launchImageLibrary({
@@ -268,6 +305,7 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
       });
 
       if (result.didCancel) return;
+      
       if (result.errorCode) {
         Alert.alert('Lỗi', 'Không thể chọn ảnh');
         return;
@@ -276,15 +314,28 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
       if (result.assets && result.assets.length > 0) {
         setSelectedImages(result.assets);
         setShowForm(true);
+        setOcrError(null);
         
         // OCR từ ảnh đầu tiên
         if (result.assets[0].uri) {
           setLoading(true);
-          await performOCR(result.assets[0].uri);
+          const success = await performOCR(
+            result.assets[0].uri,
+            result.assets[0].type || 'image/jpeg'
+          );
           setLoading(false);
+
+          if (!success) {
+            Alert.alert(
+              'Thông báo',
+              'Không thể trích xuất thông tin tự động. Vui lòng nhập thủ công.',
+              [{ text: 'OK' }]
+            );
+          }
         }
       }
     } catch (error) {
+      console.error('Error selecting images:', error);
       Alert.alert('Lỗi', 'Không thể chọn ảnh');
     }
   };
@@ -293,9 +344,16 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
   const handleRemoveImage = (index: number) => {
     const newImages = selectedImages.filter((_, i) => i !== index);
     setSelectedImages(newImages);
+    
+    if (newImages.length === 0) {
+      setShowForm(false);
+      setAmount('');
+      setNote('');
+      setOcrError(null);
+    }
   };
 
-  // Format số tiền
+  // ✅ Format số tiền
   const formatAmount = (text: string) => {
     const numericValue = text.replace(/[^0-9]/g, '');
     if (!numericValue) return '';
@@ -307,6 +365,7 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     setAmount(numericValue);
   };
 
+  // ✅ Xử lý thay đổi ngày
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
@@ -314,17 +373,22 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-    // ✅ Lưu giao dịch (phiên bản MỚI)
+  // ✅ Lưu giao dịch
   const handleSaveTransaction = async () => {
+    // Validate
     if (!amount || parseInt(amount) <= 0) {
       Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
+      return;
+    }
+
+    if (selectedImages.length === 0) {
+      Alert.alert('Lỗi', 'Vui lòng chọn ít nhất 1 ảnh');
       return;
     }
 
     setLoading(true);
 
     try {
-      // 1. Chuẩn bị dữ liệu để lưu
       const newTransactionData = {
         userId: TEST_USER_ID,
         type: transactionType,
@@ -338,12 +402,10 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         updatedAt: new Date().toISOString(),
       };
 
-      // 2. Lưu lên Firestore và lấy về tham chiếu
       const docRef = await firestore()
         .collection('transactions')
         .add(newTransactionData);
 
-      // 3. Tạo đối tượng đầy đủ (bao gồm ID mới)
       const finalTransactionObject = {
         id: docRef.id,
         ...newTransactionData,
@@ -351,22 +413,22 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
 
       setLoading(false);
 
-      // 1. GỬI TÍN HIỆU VỀ CHO TAB TỔNG QUAN
-      navigation.navigate('MainTabs', { // (Hoặc tên Root Stack của Tab)
-        screen: 'Tổng quan', // <-- TÊN TAB TỔNG QUAN CỦA BẠN
+      // Navigate về overview với ngày của giao dịch
+      navigation.navigate('MainTabs', {
+        screen: 'Tổng quan',
         params: {
-          // Gửi ngày của giao dịch vừa tạo
-          jumpToDate: transactionDate.toISOString(), 
+          jumpToDate: transactionDate.toISOString(),
         },
       });
 
-  
+      // Navigate đến chi tiết giao dịch
       navigation.replace('TransactionDetail', {
         transaction: finalTransactionObject,
       });
 
     } catch (error: any) {
       setLoading(false);
+      console.error('Save error:', error);
       Alert.alert('Lỗi', `Không thể lưu: ${error.message}`);
     }
   };
@@ -375,14 +437,25 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
   if (isProcessing) {
     return (
       <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color="#FF69B4" />
-        <Text style={styles.loadingScreenText}>Đang trích xuất thông tin từ hóa đơn...</Text>
-        <Text style={styles.loadingScreenSubtext}>Vui lòng đợi trong giây lát</Text>
+        <View style={styles.loadingContent}>
+          <View style={styles.loadingIconWrapper}>
+            <ActivityIndicator size="large" color="#FF69B4" />
+          </View>
+          <Text style={styles.loadingScreenText}>
+            Đang trích xuất thông tin
+          </Text>
+          <Text style={styles.loadingScreenSubtext}>
+            Hệ thống đang phân tích ảnh hóa đơn của bạn...
+          </Text>
+          <View style={styles.loadingBar}>
+            <View style={styles.loadingBarFill} />
+          </View>
+        </View>
       </View>
     );
   }
 
-  // ✅ Màn hình chọn ảnh (khi không có autoSelect)
+  // ✅ Màn hình chọn ảnh
   if (!showForm && selectedImages.length === 0) {
     return (
       <View style={styles.container}>
@@ -402,19 +475,26 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         </View>
 
         <View style={styles.emptyContainer}>
-          <Icon name="image-outline" size={80} color="#ccc" />
+          <View style={styles.emptyIconWrapper}>
+            <Icon name="image-outline" size={64} color="#FF69B4" />
+          </View>
           <Text style={styles.emptyTitle}>Chọn ảnh hóa đơn</Text>
           <Text style={styles.emptyText}>
-            Hệ thống sẽ tự động trích xuất thông tin từ ảnh
+            Hệ thống sẽ tự động trích xuất thông tin từ ảnh hóa đơn, giúp bạn ghi chép giao dịch nhanh chóng
           </Text>
           
           <TouchableOpacity
             style={styles.selectButton}
             onPress={handleSelectImages}
           >
-            <Icon name="plus" size={24} color="#fff" />
+            <Icon name="plus" size={22} color="#fff" />
             <Text style={styles.selectButtonText}>Chọn ảnh</Text>
           </TouchableOpacity>
+
+          <View style={styles.helpSection}>
+            <Text style={styles.helpTitle}>💡 Mẹo:</Text>
+            <Text style={styles.helpText}>Chọn ảnh rõ nét của hóa đơn hoặc biên lai để kết quả tốt nhất</Text>
+          </View>
         </View>
       </View>
     );
@@ -439,63 +519,68 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Tab Chi tiêu / Thu nhập */}
-        <View style={styles.tabSwitcher}>
-          <TouchableOpacity
-            style={[
-              styles.tabButton,
-              styles.leftTab,
-              transactionType === 'expense' && styles.activeTab,
-            ]}
-            onPress={() => setTransactionType('expense')}
-          >
-            <Icon
-              name="swap-horizontal-bold"
-              size={18}
-              color={transactionType === 'expense' ? '#FF69B4' : '#666'}
-            />
-            <Text
+        <View style={styles.tabSwitcherContainer}>
+          <View style={styles.tabSwitcher}>
+            <TouchableOpacity
               style={[
-                styles.tabText,
-                transactionType === 'expense' && styles.activeTabText,
+                styles.tabButton,
+                styles.leftTab,
+                transactionType === 'expense' && styles.activeTab,
               ]}
+              onPress={() => setTransactionType('expense')}
             >
-              Chi tiêu
-            </Text>
-          </TouchableOpacity>
+              <Icon
+                name="arrow-up-bold-circle-outline"
+                size={20}
+                color={transactionType === 'expense' ? '#fff' : '#FF6B6B'}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  transactionType === 'expense' && styles.activeTabText,
+                ]}
+              >
+                Chi tiêu
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.tabButton,
-              styles.rightTab,
-              transactionType === 'income' && styles.activeTab,
-            ]}
-            onPress={() => setTransactionType('income')}
-          >
-            <Icon
-              name="swap-horizontal-bold"
-              size={18}
-              color={transactionType === 'income' ? '#FF69B4' : '#666'}
-            />
-            <Text
+            <TouchableOpacity
               style={[
-                styles.tabText,
-                transactionType === 'income' && styles.activeTabText,
+                styles.tabButton,
+                styles.rightTab,
+                transactionType === 'income' && styles.activeTabIncome,
               ]}
+              onPress={() => setTransactionType('income')}
             >
-              Thu nhập
-            </Text>
-          </TouchableOpacity>
+              <Icon
+                name="arrow-down-bold-circle-outline"
+                size={20}
+                color={transactionType === 'income' ? '#fff' : '#4CAF50'}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  transactionType === 'income' && styles.activeTabTextIncome,
+                ]}
+              >
+                Thu nhập
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Form Section */}
         <View style={styles.formSection}>
           {/* Hình ảnh */}
           <View style={styles.imagesSection}>
-            <Text style={styles.sectionLabel}>
-              Hình ảnh ({selectedImages.length}/3)
-            </Text>
+            <View style={styles.imageSectionHeader}>
+              <Text style={styles.sectionLabel}>
+                Hình ảnh
+              </Text>
+              <Text style={styles.imageCount}>{selectedImages.length}/3</Text>
+            </View>
             <View style={styles.imagesList}>
               {selectedImages.map((img, idx) => (
                 <View key={idx} style={styles.imageWrapper}>
@@ -507,9 +592,11 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
                     style={styles.removeImageButton}
                     onPress={() => handleRemoveImage(idx)}
                   >
-                    <Icon name="close-circle" size={24} color="#FF3B30" />
+                    <Icon name="close-circle" size={28} color="#FF3B30" />
                   </TouchableOpacity>
-                  <Text style={styles.imageNumber}>{idx + 1}</Text>
+                  <View style={styles.imageNumberWrapper}>
+                    <Text style={styles.imageNumber}>{idx + 1}</Text>
+                  </View>
                 </View>
               ))}
 
@@ -519,8 +606,8 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
                   onPress={handleSelectImages}
                   disabled={loading}
                 >
-                  <Icon name="plus" size={32} color="#ccc" />
-                  <Text style={styles.addImageText}>Thêm hình</Text>
+                  <Icon name="plus" size={40} color="#FF69B4" />
+                  <Text style={styles.addImageText}>Thêm ảnh</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -530,14 +617,22 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
           {loading && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#FF69B4" />
-              <Text style={styles.loadingText}>Đang trích xuất...</Text>
+              <Text style={styles.loadingText}>Đang trích xuất thông tin...</Text>
+            </View>
+          )}
+
+          {/* OCR Error */}
+          {ocrError && (
+            <View style={styles.errorContainer}>
+              <Icon name="alert-circle-outline" size={22} color="#FF9800" />
+              <Text style={styles.errorText}>{ocrError}</Text>
             </View>
           )}
 
           {/* Số tiền */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Số tiền*</Text>
-            <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Số tiền<Text style={styles.required}>*</Text></Text>
+            <View style={styles.amountInputWrapper}>
               <TextInput
                 style={styles.input}
                 value={amount ? formatAmount(amount) : ''}
@@ -552,41 +647,57 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
 
           {/* Danh mục */}
           <View style={styles.categoryGroup}>
-            <Text style={styles.inputLabel}>Danh mục*</Text>
+            <Text style={styles.inputLabel}>Danh mục<Text style={styles.required}>*</Text></Text>
             <View style={styles.categoryContainer}>
-              {categories.map((cat, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.categoryButton,
-                    selectedCategory === cat.label && styles.selectedCategory,
-                  ]}
-                  onPress={() => setSelectedCategory(cat.label)}
-                  disabled={loading}
-                >
-                  <Icon
-                    name={cat.icon}
-                    size={24}
-                    color={selectedCategory === cat.label ? '#FF69B4' : '#333'}
-                    style={{ marginBottom: 4 }}
-                  />
-                  <Text style={styles.categoryText}>{cat.label}</Text>
-                </TouchableOpacity>
-              ))}
+              {categories.map((cat, index) => {
+                const catColor = categoryColors[cat.label] || '#9D9D9D';
+                const isSelected = selectedCategory === cat.label;
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.categoryButton,
+                      isSelected && styles.selectedCategory,
+                      isSelected && { borderColor: catColor }
+                    ]}
+                    onPress={() => setSelectedCategory(cat.label)}
+                    disabled={loading}
+                  >
+                    <View style={[
+                      styles.categoryIconWrapper,
+                      { backgroundColor: catColor + '20' }
+                    ]}>
+                      <Icon
+                        name={cat.icon}
+                        size={28}
+                        color={isSelected ? catColor : '#999'}
+                      />
+                    </View>
+                    <Text style={[
+                      styles.categoryText,
+                      isSelected && styles.categoryTextActive,
+                      isSelected && { color: catColor }
+                    ]}>
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
           {/* Ngày giao dịch */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Ngày giao dịch*</Text>
+            <Text style={styles.inputLabel}>Ngày giao dịch<Text style={styles.required}>*</Text></Text>
             <TouchableOpacity
               style={styles.inputContainer}
               onPress={() => setShowDatePicker(true)}
             >
+              <Icon name="calendar-outline" size={20} color="#999" />
               <Text style={styles.inputDropdown}>
                 {transactionDate.toLocaleDateString('vi-VN')}
               </Text>
-              <Icon name="calendar" size={24} color="#888" />
             </TouchableOpacity>
           </View>
 
@@ -602,11 +713,10 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
 
           {/* Nguồn tiền */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Nguồn tiền*</Text>
+            <Text style={styles.inputLabel}>Nguồn tiền<Text style={styles.required}>*</Text></Text>
             <View style={styles.inputContainer}>
-              <Icon name="wallet" size={24} color="#4CAF50" />
+              <Icon name="wallet-outline" size={20} color="#4CAF50" />
               <Text style={styles.walletText}>{wallet}</Text>
-              <Icon name="chevron-down" size={24} color="#888" />
             </View>
           </View>
 
@@ -629,16 +739,23 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
       {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+          style={[
+            styles.saveButton,
+            transactionType === 'income' && styles.saveButtonIncome,
+            loading && styles.saveButtonDisabled
+          ]}
           onPress={handleSaveTransaction}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.saveButtonText}>
-              Thêm giao dịch {transactionType === 'expense' ? 'chi' : 'thu'}
-            </Text>
+            <>
+              <Icon name="check" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.saveButtonText}>
+                Lưu giao dịch {transactionType === 'expense' ? 'chi' : 'thu'}
+              </Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -649,27 +766,52 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#f5f7fa',
   },
   loadingScreen: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
+  },
+  loadingContent: {
+    alignItems: 'center',
     paddingHorizontal: 40,
   },
+  loadingIconWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fff0f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
   loadingScreenText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 20,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 8,
     textAlign: 'center',
   },
   loadingScreenSubtext: {
     fontSize: 14,
     color: '#999',
-    marginTop: 8,
     textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  loadingBar: {
+    width: 200,
+    height: 4,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  loadingBarFill: {
+    width: '60%',
+    height: '100%',
+    backgroundColor: '#FF69B4',
   },
   emptyContainer: {
     flex: 1,
@@ -677,49 +819,85 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
+  emptyIconWrapper: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#fff0f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 20,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 12,
   },
   emptyText: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    marginTop: 10,
-    lineHeight: 20,
+    lineHeight: 21,
+    marginBottom: 32,
   },
   selectButton: {
     flexDirection: 'row',
     backgroundColor: '#FF69B4',
-    borderRadius: 10,
-    paddingVertical: 15,
-    paddingHorizontal: 30,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
     alignItems: 'center',
     gap: 10,
-    marginTop: 30,
+    shadowColor: '#FF69B4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   selectButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  helpSection: {
+    marginTop: 40,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: '#f5f7fa',
+    borderRadius: 12,
+    alignSelf: 'stretch',
+  },
+  helpTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 6,
+  },
+  helpText: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 19,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1a1a1a',
   },
   headerIcons: {
     flexDirection: 'row',
@@ -727,65 +905,90 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 0,
     paddingBottom: 100,
+    paddingTop: 15,
+  },
+  tabSwitcherContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   tabSwitcher: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-    paddingHorizontal: 20,
+    gap: 0,
   },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
+    paddingVertical: 14,
+    borderWidth: 2,
+    gap: 8,
   },
   leftTab: {
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
     borderRightWidth: 0,
+    borderColor: '#FF6B6B',
+    backgroundColor: '#fff',
   },
   rightTab: {
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    borderColor: '#4CAF50',
+    backgroundColor: '#fff',
   },
   activeTab: {
-    backgroundColor: '#fff0f5',
-    borderColor: '#FF69B4',
+    backgroundColor: '#FF6B6B',
+    borderColor: '#FF6B6B',
+  },
+  activeTabIncome: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
   tabText: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#666',
-    marginLeft: 5,
   },
   activeTabText: {
-    color: '#FF69B4',
-    fontWeight: 'bold',
+    color: '#fff',
+    fontWeight: '700',
+  },
+  activeTabTextIncome: {
+    color: '#fff',
+    fontWeight: '700',
   },
   formSection: {
     backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
+    borderRadius: 20,
+    padding: 24,
     marginHorizontal: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 15,
   },
   imagesSection: {
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  imageSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   sectionLabel: {
-    fontSize: 14,
-    color: '#555',
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '700',
+  },
+  imageCount: {
+    fontSize: 13,
+    color: '#999',
     fontWeight: '600',
-    marginBottom: 10,
   },
   imagesList: {
     flexDirection: 'row',
@@ -800,125 +1003,178 @@ const styles = StyleSheet.create({
   imageThumbnail: {
     width: 100,
     height: 100,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#eee',
   },
   removeImageButton: {
     position: 'absolute',
     top: -8,
-    left: -8,
+    right: -8,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  imageNumber: {
+  imageNumberWrapper: {
     position: 'absolute',
     bottom: 4,
     right: 4,
     backgroundColor: '#FF69B4',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  imageNumber: {
     color: '#fff',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: 'bold',
-    lineHeight: 24,
+    fontSize: 13,
+    fontWeight: '700',
   },
   addImageButton: {
     width: 100,
     height: 100,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#eee',
+    borderColor: '#FF69B4',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fafafa',
+    backgroundColor: '#fff0f5',
   },
   addImageText: {
     fontSize: 12,
-    color: '#999',
-    marginTop: 4,
+    color: '#FF69B4',
+    marginTop: 6,
+    fontWeight: '600',
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     gap: 10,
+    marginBottom: 15,
+    backgroundColor: '#f0fff5',
+    borderRadius: 10,
   },
   loadingText: {
     fontSize: 14,
-    color: '#666',
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 15,
+    gap: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#E65100',
+    lineHeight: 18,
+    fontWeight: '500',
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 14,
-    color: '#555',
-    fontWeight: '600',
-    marginBottom: 5,
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  required: {
+    color: '#FF6B6B',
+  },
+  amountInputWrapper: {
+    position: 'relative',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingVertical: 5,
+    borderBottomWidth: 2,
+    borderBottomColor: '#f0f0f0',
+    paddingVertical: 10,
+    gap: 10,
   },
   input: {
     flex: 1,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FF69B4',
     paddingVertical: 5,
   },
   inputDropdown: {
     flex: 1,
     fontSize: 16,
     color: '#333',
-    paddingVertical: 8,
+    fontWeight: '500',
   },
   walletText: {
     flex: 1,
     fontSize: 16,
     color: '#333',
-    marginLeft: 10,
+    fontWeight: '500',
   },
   categoryGroup: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   categoryContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 10,
+    marginTop: 12,
+    gap: 12,
   },
   categoryButton: {
-    width: (width - 40 - 30) / 4,
+    width: (width - 40 - 36) / 4,
     alignItems: 'center',
-    marginRight: 10,
-    marginBottom: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#f0f0f0',
+    backgroundColor: '#f9f9f9',
+  },
+  categoryIconWrapper: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   selectedCategory: {
-    backgroundColor: '#fff0f5',
-    borderWidth: 1,
+    backgroundColor: '#fff',
     borderColor: '#FF69B4',
   },
   categoryText: {
     fontSize: 12,
-    color: '#333',
-    marginTop: 4,
+    color: '#999',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  categoryTextActive: {
+    fontWeight: '700',
   },
   inputNote: {
     fontSize: 16,
     color: '#333',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    minHeight: 50,
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#f0f0f0',
+    minHeight: 80,
+    fontWeight: '500',
   },
   footer: {
     paddingHorizontal: 20,
@@ -930,20 +1186,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 5,
   },
   saveButton: {
-    backgroundColor: '#ff69b4',
-    borderRadius: 10,
-    paddingVertical: 15,
+    backgroundColor: '#FF69B4',
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#FF69B4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  saveButtonIncome: {
+    backgroundColor: '#4CAF50',
+    shadowColor: '#4CAF50',
   },
   saveButtonDisabled: {
     backgroundColor: '#ffb3d9',
+    shadowOpacity: 0.1,
   },
   saveButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });
 

@@ -1,13 +1,67 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  Switch, 
+  Alert, 
+  ActivityIndicator 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import auth from '@react-native-firebase/auth';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/AppNavigator'; // Đảm bảo đường dẫn đúng
+import { useTransactions } from '../hook/useTransactions'; // Đảm bảo đường dẫn đúng
+import { getRecentWeeks, calculateReport } from '../utils/reportUtils'; // Đảm bảo đường dẫn đúng
+import NotificationHelper from '../utils/NotificationHelper';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Để lưu trạng thái bật/tắt
+import { useTheme } from '../theme/themeContext';
+
+// Định nghĩa type cho navigation
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const UtilitiesScreen = () => {
+  const navigation = useNavigation<NavigationProp>();
+  const { transactions, loading: transactionsLoading } = useTransactions();
   const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [isEnabled, setIsEnabled] = useState(false);
+  
+  // State cho báo cáo
+  const [weekReports, setWeekReports] = useState<any[]>([]);
+  const { isDarkMode, toggleTheme, colors } = useTheme();
 
-  // 2. HÀM XỬ LÝ ĐĂNG XUẤT
+  // Tính toán báo cáo khi có transactions
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const weeks = getRecentWeeks(2); // Lấy 2 tuần gần nhất
+      const reports = weeks.map((week, index) => {
+        const previousWeek = weeks[index + 1];
+        const report = calculateReport(
+          transactions,
+          week.startDate,
+          week.endDate,
+          previousWeek?.startDate,
+          previousWeek?.endDate
+        );
+        return {
+          label: week.label,
+          ...report,
+        };
+      });
+      setWeekReports(reports);
+    }
+  }, [transactions]);
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
+  };
+
+  // HÀM XỬ LÝ ĐĂNG XUẤT
   const handleLogout = () => {
     Alert.alert(
       "Đăng xuất",
@@ -27,155 +81,225 @@ const UtilitiesScreen = () => {
     );
   };
 
-  // 3. HÀM XỬ LÝ KHI BẤM VÀO TIỆN ÍCH
-  const handleItemPress = (item : any) => {
-    if (item.id === 'logout') { // Kiểm tra ID đặc biệt
-      handleLogout();
+  // Load trạng thái đã lưu khi mở màn hình
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const savedState = await AsyncStorage.getItem('DAILY_REMINDER_ENABLED');
+      setIsEnabled(savedState === 'true');
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  // Hàm xử lý khi bấm nút Switch
+  const toggleSwitch = async () => {
+    const newState = !isEnabled;
+    setIsEnabled(newState);
+    
+    // Lưu vào bộ nhớ máy
+    await AsyncStorage.setItem('DAILY_REMINDER_ENABLED', String(newState));
+
+    if (newState) {
+      // ✅ NẾU BẬT: Gọi hàm lên lịch
+      await NotificationHelper.scheduleDailyReminder();
     } else {
-      // Xử lý các tiện ích khác (ví dụ: navigation.navigate(item.screen))
+      // ❌ NẾU TẮT: Gọi hàm hủy
+      await NotificationHelper.cancelDailyReminder();
+    }
+  };
+
+  // --- HÀM XỬ LÝ KHI BẤM VÀO TIỆN ÍCH (ĐÃ CẬP NHẬT) ---
+  const handleItemPress = (item: any) => {
+    if (item.id === 'logout') {
+      handleLogout();
+    } else if (item.id === 1) {
+      navigation.navigate('IncomeExpenseTrend');
+    } else if (item.id === 2) { 
+      navigation.navigate('PeriodicExpenseReport');
+    } else if (item.id === 3) { 
+      navigation.navigate('BudgetScreen'); 
+    }else if (item.id === 4) { 
+      navigation.navigate('CategoryManagementScreen'); 
+    }  else {
       console.log('Bấm vào:', item.title);
+      Alert.alert("Thông báo", "Tính năng đang được phát triển");
     }
   };
 
   const utilityItems = [
     {
       id: 1,
-      icon: 'file-plus',
-      title: 'Nhập GD\nbằng ảnh',
-      color: '#4DD0E1',
-    },
-    {
-      id: 2,
       icon: 'chart-line',
       title: 'Biến động\nthu chi',
       color: '#4DD0E1',
     },
     {
-      id: 3,
+      id: 2,
       icon: 'calendar-refresh',
       title: 'Giao dịch\nđịnh kỳ',
       color: '#4DD0E1',
       badge: 'Mới',
     },
     {
-      id: 4,
+      id: 3,
       icon: 'wallet',
-      title: 'Ngân sách\nchi tiêu',
+      title: 'Ngân sách\nchi tiêu', // ✅ Đây là mục Ngân sách
       color: '#4DD0E1',
     },
     {
-      id: 5,
-      icon: 'cellphone-link',
-      title: 'Thêm vào\nthiết bị',
-      color: '#4DD0E1',
-    },
-    {
-      id: 6,
+      id: 4,
       icon: 'folder',
       title: 'Quản lý\ndanh mục',
       color: '#4DD0E1',
     },
     {
-      id: 7,
+      id: 5,
       icon: 'tag',
       title: 'Phân loại\ngiao dịch',
       color: '#4DD0E1',
     },
     {
-      id: 8,
-      icon: 'credit-card-multiple',
-      title: 'Cộng đồng\nchi tiêu',
-      color: '#4DD0E1',
-    },
-    {
-      id: 9,
+      id: 6,
       icon: 'calendar-month',
       title: 'Nhìn lại\ntháng 9',
       color: '#4DD0E1',
     },
     {
-      id: 10,
-      icon: 'star-circle',
-      title: 'Gỡ khỏi\ntrang chủ',
-      color: '#4DD0E1',
-    },
-    {
-      id: 11,
+      id: 7,
       icon: 'calculator',
       title: 'Hạn mức\ngiao dịch',
       color: '#4DD0E1',
     },
     {
-      id: 'logout', // ID đặc biệt để dễ kiểm tra
+      id: 'logout',
       icon: 'logout',
       title: 'Đăng xuất',
-      color: '#FF5252', // Màu đỏ nổi bật
+      color: '#FF5252',
     },
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tiện ích</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      
+      {/* 1. Header (Áp dụng màu nền động) */}
+      <View style={[styles.header, { backgroundColor: isDarkMode ? colors.surface : '#FFD6E8' }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Tiện ích</Text>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="wallet-outline" size={24} color="#000" />
+            <Icon name="wallet-outline" size={24} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="home-outline" size={24} color="#000" />
+            <Icon name="home-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Spending Report Section */}
-        <View style={styles.reportSection}>
-          <Text style={styles.sectionTitle}>Báo cáo chi tiêu định kỳ</Text>
-          
-          <View style={styles.reportCards}>
-            {/* Weekly Report Card */}
-            <View style={styles.reportCard}>
-              <View style={styles.reportBadge}>
-                <View style={styles.redDot} />
+        
+        {/* 2. Card Cài đặt Dark Mode */}
+        <View style={[styles.reportSection, { backgroundColor: colors.surface }]}>
+           <View style={styles.row}>
+              <View style={styles.left}>
+                 <Icon name="theme-light-dark" size={24} color={colors.primary} />
+                 <View style={{marginLeft: 12}}>
+                    <Text style={[styles.title, { color: colors.text }]}>Chế độ tối</Text>
+                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                       Giao diện tối giúp bảo vệ mắt
+                    </Text>
+                 </View>
               </View>
-              <Text style={styles.reportLabel}>Tuần:</Text>
-              <Text style={styles.reportDate}>13/10 - 19/10</Text>
-              <Text style={styles.reportEmoji}>💊</Text>
-            </View>
-
-            {/* Monthly Report Card */}
-            <View style={[styles.reportCard, styles.reportCardRight]}>
-              <Text style={styles.reportLabel}>Tuần:</Text>
-              <Text style={styles.reportDate}>15/9 - 21/9</Text>
-              <Text style={styles.reportEmoji}>💊</Text>
-            </View>
-          </View>
-
-          {/* Notification Toggle */}
-          <View style={styles.notificationRow}>
-            <Text style={styles.notificationText}>
-              Nhận thông báo khi có báo cáo chi tiêu
-            </Text>
-            <Switch
-              value={notificationEnabled}
-              onValueChange={setNotificationEnabled}
-              trackColor={{ false: '#D1D1D1', true: '#4CD080' }}
-              thumbColor="#fff"
-            />
-          </View>
+              <Switch
+                 value={isDarkMode}
+                 onValueChange={toggleTheme}
+                 trackColor={{ false: "#767577", true: colors.primary }}
+                 thumbColor={"#fff"}
+              />
+           </View>
         </View>
 
-        {/* Advanced Utilities Section */}
-        <View style={styles.utilitiesSection}>
-          <Text style={styles.sectionTitle}>Tiện ích nâng cao</Text>
+        {/* 3. Báo cáo chi tiêu (Áp dụng màu surface và text) */}
+        <View style={[styles.reportSection, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Báo cáo chi tiêu định kỳ</Text>
+          
+          {transactionsLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Đang tải dữ liệu...</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.reportCards}>
+                {weekReports.length > 0 ? (
+                  <>
+                    {/* Các Card con bên trong */}
+                    {weekReports.map((report, index) => (
+                        <TouchableOpacity 
+                          key={index}
+                          style={[
+                              styles.reportCard, 
+                              index === 1 && styles.reportCardRight,
+                              // Nếu Dark Mode thì làm màu nền card con tối hơn chút hoặc sáng hơn chút tùy gu
+                              { 
+                                  backgroundColor: isDarkMode ? colors.background : '#FFF5F8',
+                                  borderColor: isDarkMode ? colors.border : '#FFE0ED'
+                              }
+                          ]}
+                          onPress={() => navigation.navigate('PeriodicExpenseReport')}
+                        >
+                          {index === 0 && (
+                              <View style={styles.reportBadge}>
+                                <View style={styles.redDot} />
+                              </View>
+                          )}
+                          <Text style={styles.reportLabel}>Tuần:</Text>
+                          <Text style={[styles.reportDate, { color: colors.text }]}>{report.label || 'N/A'}</Text>
+                          <Text style={styles.reportAmount}>
+                            {report ? formatCurrency(report.totalExpense) : '0đ'}
+                          </Text>
+                          <Text style={[
+                            styles.reportTrend,
+                            report.trend === 'up' ? styles.trendUp : styles.trendDown
+                          ]}>
+                            {report.comparison}
+                          </Text>
+                        </TouchableOpacity>
+                    ))}
+                  </>
+                ) : (
+                  <View style={styles.emptyReport}>
+                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Chưa có giao dịch nào</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Notification Toggle */}
+              <View style={[styles.notificationRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.notificationText, { color: colors.text }]}>Nhận thông báo khi có báo cáo chi tiêu</Text>
+                <Switch
+                  trackColor={{ false: "#767577", true: "#4CAF50" }}
+                  thumbColor={isEnabled ? "#fff" : "#f4f3f4"}
+                  onValueChange={toggleSwitch}
+                  value={isEnabled}
+                />
+            </View>
+            </>
+          )}
+        </View>
+
+        {/* 4. Tiện ích nâng cao */}
+        <View style={[styles.utilitiesSection, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Tiện ích nâng cao</Text>
           
           <View style={styles.utilitiesGrid}>
             {utilityItems.map((item) => (
               <TouchableOpacity 
                 key={item.id} 
                 style={styles.utilityItem}
-                onPress={() => handleItemPress(item)} // <-- THÊM SỰ KIỆN ONPRESS
+                onPress={() => handleItemPress(item)}
               >
                 {item.badge && (
                   <View style={styles.badge}>
@@ -185,7 +309,7 @@ const UtilitiesScreen = () => {
                 <View style={[styles.utilityIcon, { backgroundColor: item.color + '20' }]}>
                   <Icon name={item.icon} size={32} color={item.color} />
                 </View>
-                <Text style={styles.utilityTitle}>{item.title}</Text>
+                <Text style={[styles.utilityTitle, { color: colors.text }]}>{item.title}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -194,7 +318,6 @@ const UtilitiesScreen = () => {
     </SafeAreaView>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -276,13 +399,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  reportEmoji: {
-    fontSize: 24,
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
+  reportAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF6B6B',
+    marginBottom: 4,
+  },
+  reportTrend: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  trendUp: {
+    color: '#FF6B6B',
+  },
+  trendDown: {
+    color: '#4CAF50',
   },
   notificationRow: {
     flexDirection: 'row',
@@ -354,50 +487,49 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 14,
   },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
-  },
-  navItem: {
+  loadingContainer: {
+    padding: 40,
     alignItems: 'center',
-    flex: 1,
   },
-  navText: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 4,
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#999',
   },
-  navTextActive: {
-    color: '#FF69B4',
-  },
-  addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FF69B4',
-    justifyContent: 'center',
+  emptyReport: {
+    padding: 40,
     alignItems: 'center',
-    marginTop: -28,
-    shadowColor: '#FF69B4',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
   },
-  addButtonText: {
-    fontSize: 9,
-    color: '#fff',
-    marginTop: 2,
-    fontWeight: '600',
+  emptyText: {
+    fontSize: 14,
+    color: '#999',
   },
+  card: {
+     borderRadius: 12, 
+     padding: 16, 
+     marginBottom: 12,
+     elevation: 2, 
+     shadowColor: '#000', 
+     shadowOpacity: 0.1, 
+     shadowOffset: {width:0, height:2}
+  },
+  row: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center'
+   },
+  left: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  title: { 
+    fontSize: 16, 
+    fontWeight: '600'
+   },
+  subtitle: { 
+    fontSize: 12,
+     marginTop: 2 
+    }
 });
 
 export default UtilitiesScreen;

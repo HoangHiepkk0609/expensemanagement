@@ -14,47 +14,21 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
-import storage from '@react-native-firebase/storage';
-import { launchImageLibrary } from 'react-native-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useTheme } from '../theme/themeContext'; // ✅ Import useTheme
+import { 
+  DEFAULT_EXPENSE_CATEGORIES, 
+  DEFAULT_INCOME_CATEGORIES,
+} from '../constants/categories'; 
 
 const { width } = Dimensions.get('window');
 
-// Data giả cho danh mục
-const categories = [
-  { label: 'Ăn uống', icon: 'silverware-fork-knife', color: '#ff69b4' },
-  { label: 'Mua sắm', icon: 'cart-outline', color: '#fddb92' },
-  { label: 'Người thân', icon: 'human-handsup', color: '#e0c3fc' },
-  { label: 'Khác', icon: 'dots-grid', color: '#ccc' },
-];
-
-const allCategories = [
-  { label: 'Ăn uống', icon: 'silverware-fork-knife' },
-  { label: 'Mua sắm', icon: 'cart-outline' },
-  { label: 'Người thân', icon: 'human-handsup' },
-  { label: 'Hóa đơn', icon: 'receipt' },
-  { label: 'Nhà cửa', icon: 'home-outline' },
-  { label: 'Giải trí', icon: 'movie-outline' },
-  { label: 'Làm đẹp', icon: 'spa' },
-  { label: 'Sức khỏe', icon: 'hospital-box' },
-  { label: 'Từ thiện', icon: 'heart-outline' },
-  { label: 'Học tập', icon: 'book-outline' },
-  { label: 'Di chuyển', icon: 'car-outline' },
-  { label: 'Đầu tư', icon: 'trending-up' },
-];
-
-const incomeCategories = [
-  { label: 'Kinh doanh', icon: 'chart-line' },
-  { label: 'Lương', icon: 'cash-marker' },
-  { label: 'Thưởng', icon: 'wallet-giftcard' },
-  { label: 'Khác', icon: 'dots-grid' },
-  // ... (Bạn có thể thêm các danh mục thu nhập khác ở đây)
-];
-
 const AddTransactionScreen = ({ navigation, route }: any) => {
+  const { colors, isDarkMode } = useTheme(); // ✅ Lấy colors
+  
   const [transactionType, setTransactionType] = useState('expense');
   const [inputMode, setInputMode] = useState('manual');
-  const [selectedCategory, setSelectedCategory] = useState(categories[0].label);
+  const [selectedCategory, setSelectedCategory] = useState(DEFAULT_EXPENSE_CATEGORIES[0].label);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [transactionDate, setTransactionDate] = useState(new Date());
@@ -63,148 +37,198 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(false);
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
   
-  // STATE CHO MODAL
+  const [expenseCategoriesList, setExpenseCategoriesList] = useState(DEFAULT_EXPENSE_CATEGORIES);
+  const [incomeCategoriesList, setIncomeCategoriesList] = useState(DEFAULT_INCOME_CATEGORIES);
+  const [categoriesToShow, setCategoriesToShow] = useState(DEFAULT_EXPENSE_CATEGORIES);
+  
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [customCategories, setCustomCategories] = useState<any[]>([]);
-  const [categoriesToShow, setCategoriesToShow] = useState(allCategories);
  
-
-
-  // Nhận dữ liệu từ InvoiceScanner
-useEffect(() => {
-  if (route.params?.invoiceData) {
-    const data = route.params.invoiceData;
-    
-    // Điền dữ liệu vào form
-    if (data.total) {
-      setAmount(data.total);
-    }
-    
-    if (data.storeName) {
-      setNote(data.storeName + (data.address ? ' - ' + data.address : ''));
-    }
-    
-    if (data.date) {
-      // Parse ngày từ format dd/mm/yyyy
-      const dateParts = data.date.split(/[\/\-\.]/);
-      if (dateParts.length === 3) {
-        const day = parseInt(dateParts[0]);
-        const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
-        const year = parseInt(dateParts[2]);
-        setTransactionDate(new Date(year, month, day));
-      }
-    }
-    
-    // Có thể tự động chọn danh mục dựa vào storeName
-    if (data.storeName) {
-      const lowerName = data.storeName.toLowerCase();
-      if (lowerName.includes('shop') || lowerName.includes('store')) {
-        setSelectedCategory('Mua sắm');
-      } else if (lowerName.includes('food') || lowerName.includes('phở') || lowerName.includes('cơm')) {
-        setSelectedCategory('Ăn uống');
-      }
-    }
-    
-    // Chuyển sang tab nhập thủ công để user xem/chỉnh sửa
-    setInputMode('manual');
-    
-    Alert.alert('Thành công', 'Đã nhập thông tin từ hóa đơn. Vui lòng kiểm tra và điều chỉnh nếu cần!');
-    
-    // Clear params để tránh load lại khi quay về
-    navigation.setParams({ invoiceData: undefined });
-  }
-}, [route.params?.invoiceData]);
-
-// ✅ Tự động đổi danh mục khi chuyển tab
-  useEffect(() => {
-    if (transactionType === 'expense') {
-      setCategoriesToShow(allCategories);
-      // Đặt lại danh mục được chọn nếu nó không có trong danh sách mới
-      if (!allCategories.find(c => c.label === selectedCategory)) {
-        setSelectedCategory(allCategories[0].label);
-      }
-    } else { // Khi là 'income'
-      setCategoriesToShow(incomeCategories);
-      // Đặt lại danh mục được chọn nếu nó không có trong danh sách mới
-      if (!incomeCategories.find(c => c.label === selectedCategory)) {
-        setSelectedCategory(incomeCategories[0].label);
-      }
-    }
-  }, [transactionType]); // Chạy lại khi transactionType thay đổi
-
-  // OPTIONS
-  const recurrenceOptions = [
-    'Không lặp lại',
-    'Hàng ngày',
-    'Hàng tuần',
-    'Hàng tháng',
-    'Hàng năm'
-  ];
-
-  const walletOptions = [
-    'Ngoài MoMo',
-    'Ví MoMo',
-    'Thẻ ngân hàng',
-    'Tiền mặt',
-    'Ví điện tử khác'
-  ];
+  const categoryColors: any = {
+    'Ăn uống': '#FF6B6B',
+    'Mua sắm': '#FFD93D',
+    'Di chuyển': '#6BCB77',
+    'Người thân': '#4D96FF',
+    'Khác': '#9D9D9D',
+    'Lương': '#4CAF50',
+    'Kinh doanh': '#2196F3',
+    'Thưởng': '#FFC107',
+  };
 
   const currentUser = auth().currentUser;
   const TEST_USER_ID = 'my-test-user-id-123';
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setTransactionDate(selectedDate);
+  const resetFields = () => {
+    setAmount('');              
+    setNote('');                
+    setTransactionDate(new Date()); 
+    setRecurrence('Không lặp lại');
+    setWallet('Ngoài MoMo');
+    setSelectedImages([]); 
+    
+    if (transactionType === 'expense') {
+      setSelectedCategory(expenseCategoriesList[0]?.label || DEFAULT_EXPENSE_CATEGORIES[0].label);
+    } else {
+      setSelectedCategory(incomeCategoriesList[0]?.label || DEFAULT_INCOME_CATEGORIES[0].label);
     }
   };
 
-  // Hàm format số tiền
+  useEffect(() => {
+    if (route.params?.invoiceData) {
+      const data = route.params.invoiceData;
+      
+      if (data.total) setAmount(data.total);
+      
+      if (data.storeName) {
+        setNote(data.storeName + (data.address ? ' - ' + data.address : ''));
+      }
+      
+      if (data.date) {
+        const dateParts = data.date.split(/[\/\-\.]/);
+        if (dateParts.length === 3) {
+          const day = parseInt(dateParts[0]);
+          const month = parseInt(dateParts[1]) - 1;
+          const year = parseInt(dateParts[2]);
+          setTransactionDate(new Date(year, month, day));
+        }
+      }
+      
+      if (data.storeName) {
+        const lowerName = data.storeName.toLowerCase();
+        if (lowerName.includes('shop') || lowerName.includes('store')) {
+          setSelectedCategory('Mua sắm');
+        } else if (lowerName.includes('food') || lowerName.includes('phở') || lowerName.includes('cơm')) {
+          setSelectedCategory('Ăn uống');
+        }
+      }
+      
+      setInputMode('manual');
+      Alert.alert('Thành công', 'Đã nhập thông tin từ hóa đơn. Vui lòng kiểm tra và điều chỉnh nếu cần!');
+      navigation.setParams({ invoiceData: undefined });
+    }
+  }, [route.params?.invoiceData]);
+
+  useEffect(() => {
+    const subscriber = firestore()
+      .collection('user_categories')
+      .where('userId', '==', TEST_USER_ID)
+      .onSnapshot(querySnapshot => {
+        const customExpense: any[] = [];
+        querySnapshot.forEach(doc => {
+          customExpense.push({ id: doc.id, ...doc.data() });
+        });
+        setExpenseCategoriesList([...DEFAULT_EXPENSE_CATEGORIES, ...customExpense]);
+      });
+    return () => subscriber();
+  }, []);
+
+  useEffect(() => {
+    if (transactionType === 'expense') {
+      setCategoriesToShow(expenseCategoriesList);
+      if (!expenseCategoriesList.find(c => c.label === selectedCategory)) {
+        setSelectedCategory(expenseCategoriesList[0].label);
+      }
+    } else { 
+      setCategoriesToShow(incomeCategoriesList);
+      if (!incomeCategoriesList.find(c => c.label === selectedCategory)) {
+        setSelectedCategory(incomeCategoriesList[0].label);
+      }
+    }
+  }, [transactionType, expenseCategoriesList, incomeCategoriesList]);
+
+  useEffect(() => {
+    if (route.params?.nimoData) {
+      const data = route.params.nimoData;
+      console.log("Dữ liệu từ Nimo:", data);
+
+      if (data.amount) setAmount(data.amount.toString());
+      if (data.note) setNote(data.note);
+      if (data.date) {
+        setTransactionDate(new Date(data.date));
+      }
+
+      if (data.category) {
+        const allCategories = [...expenseCategoriesList, ...incomeCategoriesList];
+        const match = allCategories.find(c => 
+          c.label.toLowerCase() === data.category.toLowerCase()
+        );
+        
+        if (match) {
+          setSelectedCategory(match.label);
+        } else {
+          setSelectedCategory(data.category);
+        }
+      }
+
+      setInputMode('manual');
+      navigation.setParams({ nimoData: undefined });
+    }
+  }, [route.params?.nimoData, expenseCategoriesList, incomeCategoriesList]);
+
+  const recurrenceOptions = ['Không lặp lại', 'Hàng ngày', 'Hàng tuần', 'Hàng tháng', 'Hàng năm'];
+  const walletOptions = ['Ngoài MoMo', 'Ví MoMo', 'Thẻ ngân hàng', 'Tiền mặt', 'Ví điện tử khác'];
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) setTransactionDate(selectedDate);
+  };
+
   const formatAmount = (text: string) => {
     const numericValue = text.replace(/[^0-9]/g, '');
     if (!numericValue) return '';
     return new Intl.NumberFormat('vi-VN').format(parseInt(numericValue)) + 'đ';
   };
 
-  // Hàm xử lý nhập số tiền
   const handleAmountChange = (text: string) => {
     const numericValue = text.replace(/[^0-9]/g, '');
     setAmount(numericValue);
   };
 
-  // Hàm xử lý nút quay lại
   const handleGoBack = () => {
-    if (navigation && navigation.goBack) {
-      navigation.goBack();
-    }
+    if (navigation && navigation.goBack) navigation.goBack();
   };
 
-  // ✅ Hàm tạo danh mục mới
-  const handleCreateCategory = () => {
-    if (!newCategoryName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập tên danh mục');
-      return;
-    }
+  const handleCreateCategory = async () => {
+    const colorOptions = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+    const randomColor = colorOptions[Math.floor(Math.random() * colorOptions.length)];
     
     const newCategory = {
       label: newCategoryName,
-      icon: 'tag-outline'
+      icon: 'tag-outline',
+      color: randomColor,
+      type: transactionType,
+      userId: TEST_USER_ID,
+      createdAt: new Date().toISOString(),
     };
-    
-    setCustomCategories([...customCategories, newCategory]);
-    setSelectedCategory(newCategoryName);
-    setNewCategoryName('');
-    setShowCreateCategory(false);
-    setShowCategoryModal(false);
-    Alert.alert('Thành công', `Đã tạo danh mục "${newCategoryName}" thành công!`);
+
+    setLoading(true);
+    try {
+      const docRef = await firestore().collection('categories').add(newCategory);
+      const createdCategory = {
+        label: newCategoryName,
+        icon: 'tag-outline',
+        color: randomColor,
+        type: transactionType,
+        userId: TEST_USER_ID,
+        createdAt: new Date().toISOString(),
+        id: docRef.id,
+      };
+      setSelectedCategory(docRef.id);
+      setNewCategoryName('');
+      setShowCreateCategory(false);
+      setShowCategoryModal(false);
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+      console.error("Lỗi tạo danh mục:", error);
+      Alert.alert('Lỗi', 'Không thể tạo danh mục mới.');
+    }
   };
 
-  // Hàm validate dữ liệu
   const validateTransaction = () => {
     if (!amount || parseInt(amount) <= 0) {
       Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
@@ -217,16 +241,14 @@ useEffect(() => {
     return true;
   };
 
-  // ✅ Hàm thêm giao dịch vào Firebase (Đã sửa)
   const handleAddTransaction = async () => {
     if (!validateTransaction()) return;
 
     setLoading(true);
     try {
-      // 1. Chuẩn bị dữ liệu
       const transactionData = {
         userId: TEST_USER_ID,
-        type: transactionType, // Đã có
+        type: transactionType,
         amount: parseInt(amount),
         category: selectedCategory,
         note: note || '',
@@ -237,33 +259,27 @@ useEffect(() => {
         updatedAt: new Date().toISOString(),
       };
 
-      // 2. Lưu lên Firestore
       const docRef = await firestore()
         .collection('transactions')
         .add(transactionData);
 
       console.log('✅ Transaction added with ID:', docRef.id);
 
-      // 3. Tạo object đầy đủ để truyền đi
       const finalTransactionObject = {
         id: docRef.id,
         ...transactionData,
       };
 
       setLoading(false);
+      resetFields(); 
 
-      // --- PHẦN SỬA ĐỔI QUAN TRỌNG ---
-      // Bỏ Alert.alert() và thay bằng:
-
-      // 4. Gửi tín hiệu về cho "Tổng quan" để nhảy tháng
       navigation.navigate('MainTabs', {
-        screen: 'Tổng quan', // (Hoặc tên Tab 'Overview' của bạn)
+        screen: 'Tổng quan',
         params: {
           jumpToDate: transactionDate.toISOString(),
         },
       });
 
-      // 5. Chuyển thẳng sang màn hình "Chi tiết"
       navigation.navigate('TransactionDetail', {
         transaction: finalTransactionObject,
       });
@@ -275,77 +291,65 @@ useEffect(() => {
     }
   };
 
-  // Hàm chọn ảnh từ thư viện
-  const handleSelectImages = async () => {
-    try {
-      const result = await launchImageLibrary({
-        mediaType: 'photo',
-        selectionLimit: 3,
-        quality: 0.8,
-      });
-
-      if (result.didCancel) {
-        console.log('User cancelled image picker');
-        return;
-      }
-
-      if (result.errorCode) {
-        Alert.alert('Lỗi', 'Không thể chọn ảnh. Vui lòng thử lại.');
-        return;
-      }
-
-      if (result.assets && result.assets.length > 0) {
-        setSelectedImages(result.assets);
-        Alert.alert('Thành công', `Đã chọn ${result.assets.length} ảnh`);
-      }
-    } catch (error) {
-      console.error('Error selecting images:', error);
-      Alert.alert('Lỗi', 'Không thể chọn ảnh. Vui lòng thử lại.');
-    }
+  const handleDeleteCategory = (categoryId: string, categoryName: string) => {
+    Alert.alert(
+      "Xác nhận xóa",
+      `Bạn có chắc muốn xóa danh mục "${categoryName}" không?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        { 
+          text: "Xóa", 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await firestore().collection('user_categories').doc(categoryId).delete();
+              if (selectedCategory === categoryName) {
+                setSelectedCategory(categoriesToShow[0].label);
+              }
+              Alert.alert('Đã xóa', `Đã xóa danh mục "${categoryName}".`);
+            } catch (error) {
+              console.error("Lỗi xóa danh mục:", error);
+              Alert.alert('Lỗi', 'Không thể xóa danh mục này.');
+            }
+          } 
+        }
+      ]
+    );
   };
 
-  // COMPONENT: SelectModal (Dùng cho tần suất, nguồn tiền)
+  // ✅ Component SelectModal với theme
   const SelectModal = ({ visible, onClose, title, options, onSelect, selectedValue }: any) => (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{title}</Text>
+        <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{title}</Text>
             <TouchableOpacity onPress={onClose}>
-              <Icon name="close" size={24} color="#888" />
+              <Icon name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <ScrollView>
             {options.map((item: any, index: number) => {
               const optionValue = typeof item === 'string' ? item : item.label;
               const isSelected = selectedValue === optionValue;
-              
               return (
                 <TouchableOpacity
                   key={index}
                   style={[
                     styles.optionItem,
-                    isSelected && styles.selectedOption
+                    { borderBottomColor: colors.border },
+                    isSelected && { backgroundColor: colors.primary + '15' }
                   ]}
-                  onPress={() => {
-                    onSelect(item);
-                    onClose();
-                  }}
+                  onPress={() => { onSelect(item); onClose(); }}
                 >
                   <Text style={[
                     styles.optionText,
-                    isSelected && styles.selectedOptionText
+                    { color: colors.text },
+                    isSelected && { color: colors.primary, fontWeight: '700' }
                   ]}>
                     {optionValue}
                   </Text>
-                  {isSelected && (
-                    <Icon name="check" size={20} color="#ff69b4" />
-                  )}
+                  {isSelected && <Icon name="check" size={20} color={colors.primary} />}
                 </TouchableOpacity>
               );
             })}
@@ -355,35 +359,29 @@ useEffect(() => {
     </Modal>
   );
 
-  // COMPONENT: InputField
-  const InputField = ({ 
-    label, 
-    value, 
-    placeholder, 
-    onPress, 
-    iconName, 
-    isDropdown = false,
-  }: any) => {
+  // ✅ Component InputField với theme
+  const InputField = ({ label, value, placeholder, onPress, iconName, isDropdown = false }: any) => {
     if (isDropdown) {
       return (
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>{label}*</Text>
-          <TouchableOpacity 
-            style={styles.inputContainer} 
-            onPress={onPress}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.inputDropdown, !value && {color: '#999'}]}>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>{label}*</Text>
+          <TouchableOpacity style={[styles.inputContainer, { borderBottomColor: colors.border }]} onPress={onPress} activeOpacity={0.7}>
+            <Text style={[
+              styles.inputDropdown,
+              { color: colors.text },
+              !value && { color: colors.textSecondary }
+            ]}>
               {value || placeholder}
             </Text>
-            <Icon name={iconName || 'chevron-down'} size={24} color="#888" style={styles.inputIcon} />
+            <Icon name={iconName || 'chevron-down'} size={24} color={colors.textSecondary} style={styles.inputIcon} />
           </TouchableOpacity>
         </View>
       );
     }
+    return null; 
   };
 
-  // Component cho các thẻ chọn ảnh
+  // ✅ Component ImageCard với theme
   const ImageCard = ({ title, statusIcon }: any) => {
     const isSuccess = statusIcon === 'check-circle';
     const iconColor = isSuccess ? '#5cb85c' : '#dc3545';
@@ -393,9 +391,12 @@ useEffect(() => {
     if (title === "Lịch sử giao dịch") {
       content = (
         <View>
-          <Text style={styles.cardDetailText}>← Tiền chuyển ra  <Text style={{color: '#dc3545'}}>-40.000đ</Text></Text>
-          <Text style={styles.cardDetailText}>↗ Tiền chuyển vào  <Text style={{color: '#5cb85c'}}>+240.000đ</Text></Text>
-          <Text style={styles.cardDetailText}>← Tiền chuyển ra  <Text style={{color: '#dc3545'}}>-100.000đ</Text></Text>
+          <Text style={[styles.cardDetailText, { color: colors.text }]}>
+            ← Tiền chuyển ra  <Text style={{color: '#dc3545'}}>-40.000đ</Text>
+          </Text>
+          <Text style={[styles.cardDetailText, { color: colors.text }]}>
+            ↗ Tiền chuyển vào  <Text style={{color: '#5cb85c'}}>+240.000đ</Text>
+          </Text>
         </View>
       );
     } else if (title === "Kết quả giao dịch") {
@@ -403,59 +404,44 @@ useEffect(() => {
         <View>
           <Text style={[styles.cardDetailText, {fontSize: 22, fontWeight: 'bold', color: '#dc3545'}]}>-100.000đ</Text>
           <Text style={[styles.cardDetailText, {color: '#5cb85c'}]}>Thành công</Text>
-          <Text style={styles.cardDetailTextSmall}>Mã giao dịch  XXX-XXX</Text>
-          <Text style={styles.cardDetailTextSmall}>Người nhận  ABC</Text>
         </View>
       );
     } else if (title === "Ảnh QR") {
-      content = (
-        <View style={{alignItems: 'center', marginVertical: 10}}>
-          <Icon name="qrcode-scan" size={40} color="#333" />
-        </View>
-      );
+      content = <View style={{alignItems: 'center', marginVertical: 10}}><Icon name="qrcode-scan" size={40} color={colors.text} /></View>;
     } else if (title === "Ảnh mờ") {
-      content = (
-        <View style={{alignItems: 'center', marginVertical: 10}}>
-          <Icon name="blur" size={40} color="#5cb85c" />
-        </View>
-      );
+      content = <View style={{alignItems: 'center', marginVertical: 10}}><Icon name="blur" size={40} color="#5cb85c" /></View>;
     }
 
     return (
-      <TouchableOpacity style={[styles.imageCard, { backgroundColor: borderColor }]}>
-        <View style={styles.cardStatusIcon}>
-          <Icon name={statusIcon} size={18} color={iconColor} />
-        </View>
-        <View style={styles.cardContent}>
-          {content}
-        </View>
-        <Text style={styles.cardTitle}>{title}</Text>
+      <TouchableOpacity style={[styles.imageCard, { backgroundColor: borderColor, borderColor: colors.border }]}>
+        <View style={styles.cardStatusIcon}><Icon name={statusIcon} size={18} color={iconColor} /></View>
+        <View style={styles.cardContent}>{content}</View>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
       </TouchableOpacity>
     );
   };
   
-  // Hiển thị giao diện Nhập Thủ Công
   const renderManualInput = () => (
     <>
-      <View style={styles.formSection}>
-        <View style={styles.inputModeSelector}>
+      <View style={[styles.formSection, { backgroundColor: colors.surface }]}>
+        <View style={[styles.inputModeSelector, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => setInputMode('manual')}>
-            <Text style={styles.modeTextActive}>Nhập thủ công</Text>
+            <Text style={[styles.modeTextActive, { color: colors.primary, borderBottomColor: colors.primary }]}>Nhập thủ công</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setInputMode('image')}>
-            <Text style={styles.modeTextInactive}>Nhập bằng ảnh</Text>
+            <Text style={[styles.modeTextInactive, { color: colors.textSecondary }]}>Nhập bằng ảnh</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Số tiền*</Text>
-          <View style={styles.inputContainer}>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>Số tiền*</Text>
+          <View style={[styles.inputContainer, { borderBottomColor: colors.border }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.primary }]}
               value={amount ? formatAmount(amount) : ''}
               onChangeText={handleAmountChange}
               placeholder="0đ"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textSecondary}
               keyboardType="numeric"
               editable={!loading}
             />
@@ -463,169 +449,135 @@ useEffect(() => {
         </View>
         
         <View style={styles.categoryGroup}>
-          <Text style={styles.inputLabel}>Danh mục*</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>Danh mục*</Text>
           <View style={styles.categoryContainer}>
             {categoriesToShow.slice(0, 3).map((cat, index) => (
               <TouchableOpacity 
                 key={index}
                 style={[
-                  styles.categoryButton, 
-                  selectedCategory === cat.label && styles.selectedCategory
+                  styles.categoryButton,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                  selectedCategory === cat.label && { 
+                    backgroundColor: colors.primary + '15',
+                    borderColor: colors.primary 
+                  }
                 ]}
                 onPress={() => setSelectedCategory(cat.label)}
                 disabled={loading}
               >
-                <Icon 
-                  name={cat.icon} 
-                  size={24} 
-                  color={selectedCategory === cat.label ? '#FF69B4' : '#333'} 
-                  style={{ marginBottom: 4 }}
-                />
-                <Text style={styles.categoryText}>{cat.label}</Text>
+                <View style={[styles.categoryIconWrapper, { backgroundColor: categoryColors[cat.label] + '20' }]}>
+                  <Icon name={cat.icon} size={24} color={categoryColors[cat.label] || colors.text} style={{ marginBottom: 4 }} />
+                </View>
+                <Text style={[styles.categoryText, { color: colors.text }]}>{cat.label}</Text>
               </TouchableOpacity>
             ))}
-            {/* Nút Khác - Mở Modal */}
             <TouchableOpacity 
               style={[
-                styles.categoryButton, 
-                selectedCategory && !categoriesToShow.slice(0, 3).find(c => c.label === selectedCategory) && styles.selectedCategory
+                styles.categoryButton,
+                { backgroundColor: colors.background, borderColor: colors.border },
+                selectedCategory && !categoriesToShow.slice(0, 3).find(c => c.label === selectedCategory) && {
+                  backgroundColor: colors.primary + '15',
+                  borderColor: colors.primary
+                }
               ]}
               onPress={() => setShowCategoryModal(true)}
               disabled={loading}
             >
-              <Icon 
-                name="dots-grid" 
-                size={24} 
-                color={selectedCategory && !categoriesToShow.slice(0, 3).find(c => c.label === selectedCategory) ? '#FF69B4' : '#333'} 
-                style={{ marginBottom: 4 }}
-              />
-              <Text style={styles.categoryText}>{selectedCategory && !categoriesToShow.slice(0, 3).find(c => c.label === selectedCategory) ? selectedCategory : 'Khác'}</Text>
+              <View style={[styles.categoryIconWrapper, { backgroundColor: '#9D9D9D20' }]}>
+                <Icon name="dots-grid" size={24} color="#9D9D9D" style={{ marginBottom: 4 }} />
+              </View>
+              <Text style={[styles.categoryText, { color: colors.text }]}>
+                {selectedCategory && !categoriesToShow.slice(0, 3).find(c => c.label === selectedCategory) ? selectedCategory : 'Khác'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ✅ MODAL CHỌN DANH MỤC */}
-        <Modal
-          visible={showCategoryModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowCategoryModal(false)}
-        >
+        {/* MODAL CHỌN DANH MỤC */}
+        <Modal visible={showCategoryModal} transparent={true} animationType="slide" onRequestClose={() => setShowCategoryModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Chọn danh mục</Text>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Chọn danh mục</Text>
                 <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-                  <Icon name="close" size={24} color="#888" />
+                  <Icon name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               <ScrollView>
-                {categoriesToShow.map((item, index) => (
+                {categoriesToShow.map((item: any, index: number) => (
                   <TouchableOpacity
                     key={index}
                     style={[
                       styles.optionItem,
-                      selectedCategory === item.label && styles.selectedOption
+                      { borderBottomColor: colors.border },
+                      selectedCategory === item.label && { backgroundColor: colors.primary + '15' }
                     ]}
-                    onPress={() => {
-                      setSelectedCategory(item.label);
-                      setShowCategoryModal(false);
-                    }}
+                    onPress={() => { setSelectedCategory(item.label); setShowCategoryModal(false); }}
                   >
                     <View style={styles.optionContent}>
-                      <Icon 
-                        name={item.icon} 
-                        size={20} 
-                        color={selectedCategory === item.label ? '#FF69B4' : '#666'}
-                        style={{ marginRight: 12 }}
-                      />
+                      <View style={[styles.optionIconWrapper, { backgroundColor: categoryColors[item.label] + '20' }]}>
+                        <Icon name={item.icon} size={22} color={categoryColors[item.label] || colors.textSecondary} />
+                      </View>
                       <Text style={[
                         styles.optionText,
-                        selectedCategory === item.label && styles.selectedOptionText
+                        { color: colors.text },
+                        selectedCategory === item.label && { color: colors.primary, fontWeight: '700' }
                       ]}>
                         {item.label}
                       </Text>
                     </View>
-                    {selectedCategory === item.label && (
-                      <Icon name="check" size={20} color="#FF69B4" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-
-                {/* ✅ Danh mục tùy chỉnh */}
-                {customCategories.map((item, index) => (
-                  <TouchableOpacity
-                    key={`custom-${index}`}
-                    style={[
-                      styles.optionItem,
-                      selectedCategory === item.label && styles.selectedOption
-                    ]}
-                    onPress={() => {
-                      setSelectedCategory(item.label);
-                      setShowCategoryModal(false);
-                    }}
-                  >
-                    <View style={styles.optionContent}>
-                      <Icon 
-                        name={item.icon} 
-                        size={20} 
-                        color={selectedCategory === item.label ? '#FF69B4' : '#666'}
-                        style={{ marginRight: 12 }}
-                      />
-                      <Text style={[
-                        styles.optionText,
-                        selectedCategory === item.label && styles.selectedOptionText
-                      ]}>
-                        {item.label}
-                      </Text>
+                    <View style={styles.optionActions}>
+                      {selectedCategory === item.label && (
+                        <Icon name="check" size={20} color={colors.primary} style={{ marginRight: 15 }} />
+                      )}
+                      {item.id && ( 
+                        <TouchableOpacity onPress={() => handleDeleteCategory(item.id, item.label)} style={styles.deleteButton}>
+                          <Icon name="trash-can-outline" size={22} color="#FF6B6B" />
+                        </TouchableOpacity>
+                      )}
                     </View>
-                    {selectedCategory === item.label && (
-                      <Icon name="check" size={20} color="#FF69B4" />
-                    )}
                   </TouchableOpacity>
                 ))}
-
-                {/* ✅ Nút Tạo mới */}
                 <TouchableOpacity 
-                  style={styles.createNewButton}
+                  style={[styles.createNewButton, { borderTopColor: colors.border }]} 
                   onPress={() => setShowCreateCategory(true)}
                 >
-                  <Icon name="plus" size={20} color="#FF69B4" style={{ marginRight: 12 }} />
-                  <Text style={styles.createNewText}>Tạo danh mục mới</Text>
+                  <Icon name="plus" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+                  <Text style={[styles.createNewText, { color: colors.primary }]}>Tạo danh mục mới</Text>
                 </TouchableOpacity>
               </ScrollView>
             </View>
           </View>
         </Modal>
 
-        {/* ✅ MODAL TẠO DANH MỤC MỚI */}
-        <Modal
-          visible={showCreateCategory}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowCreateCategory(false)}
-        >
+        {/* MODAL TẠO DANH MỤC */}
+        <Modal visible={showCreateCategory} transparent={true} animationType="slide" onRequestClose={() => setShowCreateCategory(false)}>
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { maxHeight: '50%' }]}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Tạo danh mục mới</Text>
+            <View style={[styles.modalContent, { maxHeight: '50%', backgroundColor: colors.surface }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Tạo danh mục mới</Text>
                 <TouchableOpacity onPress={() => setShowCreateCategory(false)}>
-                  <Icon name="close" size={24} color="#888" />
+                  <Icon name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
-              
               <View style={styles.createCategoryContent}>
-                <Text style={styles.createCategoryLabel}>Tên danh mục*</Text>
+                <Text style={[styles.createCategoryLabel, { color: colors.text }]}>Tên danh mục*</Text>
                 <TextInput
-                  style={styles.createCategoryInput}
+                  style={[
+                    styles.createCategoryInput,
+                    { 
+                      borderColor: colors.border,
+                      color: colors.text,
+                      backgroundColor: colors.background
+                    }
+                  ]}
                   placeholder="Nhập tên danh mục"
                   value={newCategoryName}
                   onChangeText={setNewCategoryName}
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textSecondary}
                 />
-                
                 <TouchableOpacity 
-                  style={styles.createCategoryButton}
+                  style={[styles.createCategoryButton, { backgroundColor: colors.primary }]} 
                   onPress={handleCreateCategory}
                 >
                   <Text style={styles.createCategoryButtonText}>Tạo danh mục</Text>
@@ -635,13 +587,13 @@ useEffect(() => {
           </View>
         </Modal>
 
-        <InputField
-          label="Ngày giao dịch"
-          value={transactionDate.toLocaleDateString('vi-VN')}
-          placeholder="Chọn ngày"
-          isDropdown={true}
-          iconName="calendar"
-          onPress={() => setShowDatePicker(true)}
+        <InputField 
+          label="Ngày giao dịch" 
+          value={transactionDate.toLocaleDateString('vi-VN')} 
+          placeholder="Chọn ngày" 
+          isDropdown={true} 
+          iconName="calendar" 
+          onPress={() => setShowDatePicker(true)} 
         />
 
         {showDatePicker && (
@@ -654,60 +606,69 @@ useEffect(() => {
           />
         )}
                 
-          {transactionType === 'expense' && (
-          <InputField
-            label="Tần suất lặp lại"
-            value={recurrence}
-            placeholder="Chọn tần suất"
-            isDropdown={true}
-            onPress={() => setShowRecurrenceModal(true)}
+        {transactionType === 'expense' && (
+          <InputField 
+            label="Tần suất lặp lại" 
+            value={recurrence} 
+            placeholder="Chọn tần suất" 
+            isDropdown={true} 
+            onPress={() => setShowRecurrenceModal(true)} 
           />
         )}
-        <InputField
-          label="Nguồn tiền"
-          value={wallet}
-          placeholder="Chọn nguồn tiền"
-          isDropdown={true}
-          iconName="chevron-down"
-          onPress={() => setShowWalletModal(true)}
+        <InputField 
+          label="Nguồn tiền" 
+          value={wallet} 
+          placeholder="Chọn nguồn tiền" 
+          isDropdown={true} 
+          iconName="chevron-down" 
+          onPress={() => setShowWalletModal(true)} 
         />
 
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Ghi chú</Text>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>Ghi chú</Text>
           <TextInput
-            style={styles.inputNote}
+            style={[
+              styles.inputNote,
+              { 
+                color: colors.text,
+                borderBottomColor: colors.border
+              }
+            ]}
             value={note}
             onChangeText={setNote}
             placeholder="Nhập mô tả giao dịch"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
             multiline={true}
             editable={!loading}
           />
         </View>
 
-        <SelectModal
-          visible={showRecurrenceModal}
-          onClose={() => setShowRecurrenceModal(false)}
-          title="Tần suất lặp lại"
-          options={recurrenceOptions}
-          selectedValue={recurrence}
-          onSelect={setRecurrence}
+        <SelectModal 
+          visible={showRecurrenceModal} 
+          onClose={() => setShowRecurrenceModal(false)} 
+          title="Tần suất lặp lại" 
+          options={recurrenceOptions} 
+          selectedValue={recurrence} 
+          onSelect={setRecurrence} 
         />
-
-        <SelectModal
-          visible={showWalletModal}
-          onClose={() => setShowWalletModal(false)}
-          title="Nguồn tiền"
-          options={walletOptions}
-          selectedValue={wallet}
-          onSelect={setWallet}
+        <SelectModal 
+          visible={showWalletModal} 
+          onClose={() => setShowWalletModal(false)} 
+          title="Nguồn tiền" 
+          options={walletOptions} 
+          selectedValue={wallet} 
+          onSelect={setWallet} 
         />
       </View>
       
-      <View style={styles.footer}>
+      <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         <TouchableOpacity 
-          style={[styles.addButton, loading && styles.addButtonDisabled]} 
-          onPress={handleAddTransaction}
+          style={[
+            styles.addButton,
+            { backgroundColor: colors.primary },
+            loading && styles.addButtonDisabled
+          ]} 
+          onPress={handleAddTransaction} 
           disabled={loading}
         >
           {loading ? (
@@ -722,110 +683,108 @@ useEffect(() => {
     </>
   );
 
-  // Hiển thị giao diện Nhập Bằng Ảnh
-  // Hiển thị giao diện Nhập Bằng Ảnh
-const renderImageInput = () => (
-  <>
-    <View style={styles.formSectionImage}>
-      <View style={styles.inputModeSelector}>
-        <TouchableOpacity onPress={() => setInputMode('manual')}>
-          <Text style={styles.modeTextInactive}>Nhập thủ công</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setInputMode('image')}>
-          <Text style={styles.modeTextActive}>Nhập bằng ảnh</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.imageInputTitle}>Thêm giao dịch hàng loạt từ ảnh</Text>
-      <Text style={styles.imageInputSubtitle}>
-        Chọn tối đa 3 ảnh chụp màn hình <Text style={styles.highlightText}>Lịch sử</Text> hoặc <Text style={styles.highlightText}>Kết quả</Text> giao dịch ngân hàng, Grab, Shopee...
-      </Text>
-
-      <View style={styles.imageCardContainer}>
-        <ImageCard title="Lịch sử giao dịch" statusIcon="check-circle" />
-        <ImageCard title="Kết quả giao dịch" statusIcon="check-circle" />
-        <ImageCard title="Ảnh QR" statusIcon="close-circle" />
-        <ImageCard title="Ảnh mờ" statusIcon="close-circle" />
-      </View>
-
-      {selectedImages.length > 0 && (
-        <View style={styles.selectedImagesInfo}>
-          <Text style={styles.selectedImagesText}>
-            Đã chọn {selectedImages.length} ảnh
-          </Text>
+  const renderImageInput = () => (
+    <>
+      <View style={[styles.formSectionImage, { backgroundColor: colors.surface }]}>
+        <View style={[styles.inputModeSelector, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => setInputMode('manual')}>
+            <Text style={[styles.modeTextInactive, { color: colors.textSecondary }]}>Nhập thủ công</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setInputMode('image')}>
+            <Text style={[styles.modeTextActive, { color: colors.primary, borderBottomColor: colors.primary }]}>Nhập bằng ảnh</Text>
+          </TouchableOpacity>
         </View>
-      )}
 
-      <Text style={styles.imageInputHint}>
-        Chọn tối đa 3 ảnh chụp màn hình <Text style={styles.highlightText}>Lịch sử</Text> hoặc <Text style={styles.highlightText}>Kết quả</Text> giao dịch ngân hàng, Grab, Shopee...
-      </Text>
-    </View>
-    
-    <View style={styles.footer}>
-      <TouchableOpacity 
-        style={[styles.addButton, loading && styles.addButtonDisabled]} 
-        onPress={() => navigation.navigate('ImageExtract', { autoSelect: true })}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.addButtonText}>
-            Chọn ảnh ngay
-          </Text>
-        )}
-      </TouchableOpacity>
-    </View>
-  </>
-);
+        <Text style={[styles.imageInputTitle, { color: colors.text }]}>Thêm giao dịch hàng loạt từ ảnh</Text>
+        <Text style={[styles.imageInputSubtitle, { color: colors.textSecondary }]}>
+          Chọn tối đa 3 ảnh chụp màn hình <Text style={[styles.highlightText, { color: colors.primary }]}>Lịch sử</Text> hoặc <Text style={[styles.highlightText, { color: colors.primary }]}>Kết quả</Text> giao dịch ngân hàng...
+        </Text>
+
+        <View style={styles.imageCardContainer}>
+          <ImageCard title="Lịch sử giao dịch" statusIcon="check-circle" />
+          <ImageCard title="Kết quả giao dịch" statusIcon="check-circle" />
+          <ImageCard title="Ảnh QR" statusIcon="close-circle" />
+          <ImageCard title="Ảnh mờ" statusIcon="close-circle" />
+        </View>
+        <Text style={[styles.imageInputHint, { color: colors.textSecondary }]}>Chọn tối đa 3 ảnh...</Text>
+      </View>
+      
+      <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+        <TouchableOpacity 
+          style={[
+            styles.addButton,
+            { backgroundColor: colors.primary },
+            loading && styles.addButtonDisabled
+          ]} 
+          onPress={() => navigation.navigate('ImageExtract', { autoSelect: true })} 
+          disabled={loading}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.addButtonText}>Chọn ảnh ngay</Text>}
+        </TouchableOpacity>
+      </View>
+    </>
+  );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={handleGoBack} style={styles.headerIcon}>
-          <Icon name="arrow-left" size={24} color="#333" />
+          <Icon name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ghi chép GD</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Ghi chép giao dịch</Text>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="bell-outline" size={24} color="#333" />
+            <Icon name="bell-outline" size={24} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="home-outline" size={24} color="#333" />
+            <Icon name="home-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.tabSwitcher}>
-          <TouchableOpacity
-            style={[styles.tabButton, styles.leftTab, transactionType === 'expense' && styles.activeTab]}
-            onPress={() => setTransactionType('expense')}
-            disabled={loading}
-          >
-            <Icon name="swap-horizontal-bold" size={18} color={transactionType === 'expense' ? '#FF69B4' : '#666'} />
-            <Text style={[styles.tabText, transactionType === 'expense' && styles.activeTabText]}>Chi tiêu</Text>
-          </TouchableOpacity>
+        <View style={styles.tabSwitcherContainer}>
+          <View style={styles.tabSwitcher}>
+            <TouchableOpacity
+              style={[
+                styles.tabButton, 
+                styles.leftTab,
+                { borderColor: '#FF6B6B', backgroundColor: colors.surface },
+                transactionType === 'expense' && styles.activeTab
+              ]}
+              onPress={() => setTransactionType('expense')}
+              disabled={loading}
+            >
+              <Icon name="arrow-up-bold-circle-outline" size={20} color={transactionType === 'expense' ? '#fff' : '#FF6B6B'} />
+              <Text style={[
+                styles.tabText,
+                { color: colors.text },
+                transactionType === 'expense' && styles.activeTabText
+              ]}>
+                Chi tiêu
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.tabButton, styles.rightTab, transactionType === 'income' && styles.activeTabIncome]}
-            onPress={() => setTransactionType('income')}
-            disabled={loading}
-          >
-            <Icon name="swap-horizontal-bold" size={18} color={transactionType === 'income' ? '#FF69B4' : '#666'} />
-            <Text style={[styles.tabText, transactionType === 'income' && styles.activeTabTextIncome]}>Thu nhập</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[
-              styles.addButton, 
-              transactionType === 'income' && styles.addButtonIncome, // <-- Thêm dòng này
-              loading && styles.addButtonDisabled
-            ]} 
-            onPress={handleAddTransaction}
-            disabled={loading}
-          >
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tabButton, 
+                styles.rightTab,
+                { borderColor: '#4CAF50', backgroundColor: colors.surface },
+                transactionType === 'income' && styles.activeTabIncome
+              ]}
+              onPress={() => setTransactionType('income')}
+              disabled={loading}
+            >
+              <Icon name="arrow-down-bold-circle-outline" size={20} color={transactionType === 'income' ? '#fff' : '#4CAF50'} />
+              <Text style={[
+                styles.tabText,
+                { color: colors.text },
+                transactionType === 'income' && styles.activeTabTextIncome
+              ]}>
+                Thu nhập
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {inputMode === 'manual' ? renderManualInput() : renderImageInput()}
@@ -837,134 +796,135 @@ const renderImageInput = () => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9f9f9',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
   },
   headerIcons: {
     flexDirection: 'row',
   },
   headerIcon: {
     marginLeft: 15,
+    padding: 8,
   },
   scrollContent: {
     paddingHorizontal: 0,
-    paddingBottom: 100,
+    paddingBottom: 120,
+    paddingTop: 15,
+  },
+  tabSwitcherContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 25,
   },
   tabSwitcher: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-    paddingHorizontal: 20,
+    gap: 0,
   },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
+    paddingVertical: 14,
+    borderWidth: 2,
+    gap: 8,
   },
   leftTab: {
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
     borderRightWidth: 0,
   },
   rightTab: {
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
   },
   activeTab: {
-    backgroundColor: '#fff0f5', 
-    borderColor: '#FF69B4',
+    backgroundColor: '#FF6B6B',
+    borderColor: '#FF6B6B',
+  },
+  activeTabIncome: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
   },
   tabText: {
     fontSize: 15,
-    fontWeight: '500',
-    color: '#666',
-    marginLeft: 5,
+    fontWeight: '600',
   },
   activeTabText: {
-    color: '#FF69B4',
-    fontWeight: 'bold',
+    color: '#fff',
+    fontWeight: '700',
+  },
+  activeTabTextIncome: {
+    color: '#fff',
+    fontWeight: '700',
   },
   formSection: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
+    borderRadius: 16,
+    padding: 20,
     marginHorizontal: 20,
+    marginBottom: 15,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-    marginBottom: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
   formSectionImage: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
+    borderRadius: 16,
     padding: 20,
-    marginHorizontal: 20, 
+    marginHorizontal: 20,
+    marginBottom: 15,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-    marginBottom: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
   inputModeSelector: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 25,
     borderBottomWidth: 2,
-    borderBottomColor: '#f0f0f0',
+    gap: 30,
   },
   modeTextActive: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF69B4',
-    paddingBottom: 8,
+    fontWeight: '700',
+    paddingBottom: 10,
     borderBottomWidth: 3,
-    borderBottomColor: '#FF69B4',
-    marginRight: 20,
   },
   modeTextInactive: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#999',
-    paddingBottom: 8,
-    marginRight: 20,
+    paddingBottom: 10,
   },
   imageInputTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginBottom: 10,
   },
   imageInputSubtitle: {
     fontSize: 14,
-    color: '#555',
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 21,
+    marginBottom: 22,
   },
   highlightText: {
-    color: '#FF69B4',
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   imageCardContainer: {
     flexDirection: 'row',
@@ -976,163 +936,154 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 12,
     marginBottom: 15,
-    padding: 10,
+    padding: 12,
     position: 'relative',
-    borderWidth: 1,
-    borderColor: '#eee',
+    borderWidth: 2,
     overflow: 'hidden',
+    justifyContent: 'space-between',
   },
   cardStatusIcon: {
     position: 'absolute',
-    top: 5,
-    right: 5,
+    top: 8,
+    right: 8,
     backgroundColor: 'white',
-    borderRadius: 10,
+    borderRadius: 12,
     zIndex: 10,
+    padding: 2,
   },
   cardContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'flex-start',
-    paddingHorizontal: 5,
+    paddingHorizontal: 0,
     paddingTop: 5,
-    marginBottom: 5,
-    opacity: 0.9,
+    marginBottom: 8,
   },
   cardTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
     width: '100%',
   },
   cardDetailText: {
-    fontSize: 12,
-    color: '#333',
+    fontSize: 11,
     marginBottom: 2,
-  },
-  cardDetailTextSmall: {
-    fontSize: 10,
-    color: '#666',
   },
   imageInputHint: {
     fontSize: 12,
-    color: '#999',
-    marginTop: 10,
+    marginTop: 15,
     textAlign: 'center',
-  },
-  selectedImagesInfo: {
-    backgroundColor: '#e6f7e6',
-    padding: 10,
-    borderRadius: 8,
-    marginVertical: 10,
-  },
-  selectedImagesText: {
-    fontSize: 14,
-    color: '#5cb85c',
-    fontWeight: 'bold',
-    textAlign: 'center',
+    lineHeight: 18,
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 14,
-    color: '#555',
-    fontWeight: '600',
-    marginBottom: 5,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingVertical: 5,
+    borderBottomWidth: 2,
+    paddingVertical: 8,
   },
   input: {
     flex: 1,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    paddingVertical: 5,
+    fontSize: 28,
+    fontWeight: '700',
+    paddingVertical: 8,
   },
   inputDropdown: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
-    paddingVertical: 8,
+    paddingVertical: 10,
+    fontWeight: '500',
   },
   inputNote: {
     fontSize: 16,
-    color: '#333',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    fontWeight: '500',
   },
   inputIcon: {
-    marginLeft: 10,
+    marginLeft: 12,
   },
   categoryGroup: {
-    marginBottom: 20,
+    marginBottom: 25,
   },
   categoryContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 10,
+    marginTop: 12,
+    gap: 10,
   },
   categoryButton: {
-    width: (width - 40 - 30) / 4, 
+    width: (width - 40 - 30) / 4,
     alignItems: 'center',
-    marginRight: 10,
-    marginBottom: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+  categoryIconWrapper: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   selectedCategory: {
-    backgroundColor: '#fff0f5', 
-    borderWidth: 1,
-    borderColor: '#FF69B4',
+    borderWidth: 2,
   },
   categoryText: {
     fontSize: 12,
-    color: '#333',
-    marginTop: 4,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   footer: {
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     zIndex: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
   },
   addButton: {
-    backgroundColor: '#ff69b4',
-    borderRadius: 10,
-    paddingVertical: 15,
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
+    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   addButtonDisabled: {
-    backgroundColor: '#ffb3d9',
+    opacity: 0.6,
   },
   addButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: '70%',
   },
   modalHeader: {
@@ -1141,90 +1092,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
   },
   optionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
   },
   selectedOption: {
-    backgroundColor: '#fff0f5',
   },
   optionText: {
     fontSize: 16,
-    color: '#333',
+    fontWeight: '500',
   },
   selectedOptionText: {
-    color: '#ff69b4',
-    fontWeight: 'bold',
   },
   optionContent: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    gap: 12,
+  },
+  optionIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   createNewButton: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f5f5f5',
     marginTop: 10,
   },
   createNewText: {
     fontSize: 16,
-    color: '#FF69B4',
-    fontWeight: '600',
+    fontWeight: '700',
+    marginLeft: 10,
   },
   createCategoryContent: {
     padding: 20,
   },
   createCategoryLabel: {
     fontSize: 14,
-    color: '#555',
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 12,
   },
   createCategoryInput: {
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
     marginBottom: 20,
+    fontWeight: '500',
   },
   createCategoryButton: {
-    backgroundColor: '#FF69B4',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
+    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
   },
   createCategoryButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  activeTabIncome: {
-  backgroundColor: '#f0fff5', // Màu xanh lá nhạt
-  borderColor: '#4CAF50',
-  },
-  activeTabTextIncome: {
-    color: '#4CAF50', // Màu xanh lá
-    fontWeight: 'bold',
-  },
-  addButtonIncome: {
-    backgroundColor: '#4CAF50', // Màu nút xanh lá
+    fontWeight: '700',
   },
 });
 

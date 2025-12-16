@@ -1,73 +1,104 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert} from 'react-native';
+import React, { useLayoutEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
 import { NavigationProp, RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { formatCurrency } from '../utils/formatCurrency'; 
-
 import firestore from '@react-native-firebase/firestore';
+import { useTheme } from '../theme/themeContext'; // ✅ Import useTheme
 
-// --- SỬA 1: Định nghĩa type Transaction đầy đủ ---
-// (Dựa trên các trường bạn đang dùng bên dưới)
+const { width } = Dimensions.get('window');
+
+// --- Định nghĩa type ---
 type Transaction = {
   id: string | number;
+  type: 'expense' | 'income';
   amount: number;
   date: string | Date;
   wallet: string;
   category: string;
-  note?: string; // Ghi chú có thể có hoặc không
+  note?: string;
+  recurrence?: string;
 };
 
-// --- SỬA 2: Cập nhật RootStackParamList ---
 type RootStackParamList = {
-  CategoryDetail: { 
-    category: string; 
-  };
-  TransactionDetail: { 
-    transaction: Transaction;  
-  };
-  // Thêm màn hình Edit vào đây
-  TransactionEdit: {
-    transaction: Transaction;
-  };
+  CategoryDetail: { category: string };
+  TransactionDetail: { transaction: Transaction };
+  TransactionEdit: { transaction: Transaction };
 };
 
 const formatTransactionDate = (dateString: string | Date) => {
   const date = new Date(dateString);
   const options: Intl.DateTimeFormatOptions = {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
+    weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
   };
   return new Date(date).toLocaleDateString('vi-VN', options);
 };
 
-// --- Component InfoRow (để tái sử dụng) ---
-const InfoRow = ({ label, value, icon, valueColor }: any) => {
+// --- Mapping icon và màu ---
+const categoryIcons: any = {
+  'Ăn uống': 'silverware-fork-knife', 'Mua sắm': 'cart-outline', 'Di chuyển': 'car',
+  'Người thân': 'human-handsup', 'Khác': 'dots-grid', 'Lương': 'cash-marker',
+  'Kinh doanh': 'chart-line', 'Thưởng': 'wallet-giftcard',
+};
+
+const categoryColors: any = {
+  'Ăn uống': '#FF6B6B', 'Mua sắm': '#FFD93D', 'Di chuyển': '#6BCB77',
+  'Người thân': '#4D96FF', 'Khác': '#9D9D9D', 'Lương': '#4CAF50',
+  'Kinh doanh': '#2196F3', 'Thưởng': '#FFC107',
+};
+
+// --- Component InfoRow ---
+const InfoRow = ({ label, value, icon, valueColor, isCategory, colors }: any) => {
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
       <View style={styles.valueContainer}>
-        {icon && <Text style={styles.valueIcon}>{icon}</Text>}
-        <Text style={[styles.value, valueColor && { color: valueColor }]}>
-          {value}
-        </Text>
+        {isCategory && (
+          <View style={[styles.categoryBadge, { backgroundColor: categoryColors[value] + '20' }]}>
+            <Icon 
+              name={categoryIcons[value] || 'dots-grid'} 
+              size={18} 
+              color={categoryColors[value] || '#9D9D9D'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.value, { color: categoryColors[value] || colors.text }]}>
+              {value}
+            </Text>
+          </View>
+        )}
+        {!isCategory && (
+          <>
+            {icon && <Icon name={icon} size={20} color={valueColor || colors.textSecondary} style={styles.valueIcon} />}
+            <Text style={[styles.value, { color: valueColor || colors.text }]}>
+              {value}
+            </Text>
+          </>
+        )}
       </View>
     </View>
   );
 };
 
-
 // --- Màn hình chính ---
 const TransactionDetailScreen = () => {
+  const { colors, isDarkMode } = useTheme(); // ✅ Lấy colors
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'TransactionDetail'>>();
+ 
   
-  // --- SỬA 3: Bỏ ": any" và dùng type Transaction đã định nghĩa ---
   const { transaction } = route.params;
+  const { amount, date, wallet, category, note, type } = transaction;
 
-  // Giả sử transaction có các trường: amount, date, wallet, category, note
-  const { amount, date, wallet, category, note } = transaction;
+  const isExpense = type === 'expense';
+  const amountColor = isExpense ? '#FF6B6B' : '#4CAF50';
+  const headerBgColor = isExpense ? '#FFE6E6' : '#E6F7E6';
+  
+  // ✅ Header background color cho dark mode
+  const headerBgColorDark = isExpense 
+    ? (isDarkMode ? '#4a2020' : '#FFE6E6')
+    : (isDarkMode ? '#1a3a1a' : '#E6F7E6');
 
+  // Hàm xử lý
   const handleDeletePress = () => {
     Alert.alert(
       "Xác nhận xoá",
@@ -78,16 +109,11 @@ const TransactionDetailScreen = () => {
           text: "Xoá", 
           onPress: async () => {
             try {
-              await firestore()
-                .collection('transactions')
-                .doc(transaction.id.toString()) 
-                .delete();
-              
+              if (!transaction.id) { Alert.alert("Lỗi", "ID không hợp lệ."); return; }
+              await firestore().collection('transactions').doc(transaction.id.toString()).delete();
               navigation.goBack();
-
             } catch (error) {
-              console.error("Lỗi khi xoá giao dịch: ", error);
-              Alert.alert("Lỗi", "Không thể xoá giao dịch. Vui lòng thử lại.");
+              console.error("Lỗi xoá: ", error);
             }
           },
           style: "destructive"
@@ -96,62 +122,98 @@ const TransactionDetailScreen = () => {
     );
   };
 
-  // --- SỬA 4: Thêm hàm xử lý cho nút Chỉnh sửa ---
   const handleEditPress = () => {
-    // Điều hướng đến màn hình Edit và truyền 'transaction' đi
     navigation.navigate('TransactionEdit', { transaction: transaction });
   };
 
+  // ✅ useLayoutEffect - Thêm nút vào header
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: 'Chi tiết giao dịch',
+      headerStyle: {
+        backgroundColor: colors.surface,
+        elevation: 0,
+        shadowOpacity: 0,
+      },
+      headerTintColor: colors.text, // ✅ Màu nút back
+      headerTitleStyle: {
+        color: colors.text, // ✅ Màu title
+      },
+      headerRight: () => (
+        <View style={styles.headerButtonsContainer}>
+          <TouchableOpacity onPress={handleEditPress} style={styles.headerBtn}>
+            <Icon name="pencil" size={24} color={colors.primary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity onPress={handleDeletePress} style={styles.headerBtn}>
+            <Icon name="trash-can-outline" size={24} color="#FF6B6B" />
+          </TouchableOpacity>
+        </View>
+      ),
+    });
+  }, [navigation, transaction, colors]);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.headerBackground} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Background cong phía sau */}
+      <View style={[styles.headerBackground, { backgroundColor: headerBgColorDark }]} />
       
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.card}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.mainIcon}>💰</Text> 
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Card Chính */}
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <View style={[styles.iconCircle, { backgroundColor: categoryColors[category] + '20' }]}>
+            <Icon 
+              name={categoryIcons[category] || 'dots-grid'} 
+              size={32} 
+              color={categoryColors[category] || '#9D9D9D'}
+            />
           </View>
           
-          <Text style={styles.typeText}>Chi tiêu</Text>
-          <Text style={styles.amountText}>
-            -{formatCurrency(amount)}
+          <Text style={[styles.typeText, { color: colors.textSecondary }]}>
+            {isExpense ? 'Chi tiêu' : 'Thu nhập'}
+          </Text>
+          <Text style={[styles.amountText, { color: amountColor }]}>
+            {isExpense ? '-' : '+'}{formatCurrency(amount)}
           </Text>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
           
           <InfoRow 
-            label="Nguồn tiền"
-            value={wallet || 'Ngoài MoMo'}
-            icon="💳"
+            label="Danh mục" 
+            value={category || 'Khác'} 
+            isCategory={true} 
+            colors={colors}
           />
           <InfoRow 
-            label="Thời gian"
-            value={formatTransactionDate(date)}
+            label="Nguồn tiền" 
+            value={wallet || 'Ngoài MoMo'} 
+            icon="credit-card" 
+            valueColor={colors.text}
+            colors={colors}
           />
           <InfoRow 
-            label="Danh mục"
-            value={category || 'Di chuyển'}
-            icon="🚗"
+            label="Thời gian" 
+            value={formatTransactionDate(date)} 
+            icon="calendar-outline" 
+            valueColor={colors.text}
+            colors={colors}
           />
           
           {note && (
-             <InfoRow 
-              label="Ghi chú"
-              value={note}
-            />
+            <View style={styles.noteSection}>
+              <Text style={[styles.noteLabel, { color: colors.textSecondary }]}>Ghi chú</Text>
+              <View style={[
+                styles.noteBubble, 
+                { 
+                  backgroundColor: isDarkMode ? colors.background : '#f8f9fa',
+                  borderLeftColor: colors.primary 
+                }
+              ]}>
+                <Text style={[styles.noteText, { color: colors.text }]}>{note}</Text>
+              </View>
+            </View>
           )}
         </View>
-
-       <View style={styles.footer}>
-         <TouchableOpacity style={styles.button} onPress={handleDeletePress}>
-           <Text style={styles.deleteText}>Xoá</Text>
-         </TouchableOpacity>
-         
-         {/* --- SỬA 5: Gán hàm handleEditPress vào onPress --- */}
-         <TouchableOpacity style={styles.button} onPress={handleEditPress}>
-           <Text style={styles.editText}>Chỉnh sửa</Text>
-         </TouchableOpacity>
-       </View>
       </ScrollView>
     </View>
   );
@@ -159,70 +221,78 @@ const TransactionDetailScreen = () => {
 
 export default TransactionDetailScreen;
 
-// --- Styles (Giữ nguyên) ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f8fa',
+  },
+  headerButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  headerBtn: {
+    padding: 8,
+    marginLeft: 4,
   },
   headerBackground: {
-    backgroundColor: '#f3f0fd',
-    height: 120,
+    height: 140,
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   scrollContent: {
-    padding: 16,
-    paddingTop: 40,
+    padding: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    marginTop: 20,
   },
   iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#f4f4f4',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  mainIcon: {
-    fontSize: 28,
+    marginBottom: 16,
   },
   typeText: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 4,
+    fontWeight: '500',
+    marginBottom: 8,
   },
   amountText: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
-    color: '#e74c3c',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   divider: {
     height: 1,
-    backgroundColor: '#f0f0f0',
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
   },
   label: {
     fontSize: 15,
-    color: '#888',
+    fontWeight: '500',
   },
   valueContainer: {
     flexDirection: 'row',
@@ -230,31 +300,35 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: '600',
   },
   valueIcon: {
-    fontSize: 18,
-    marginRight: 8,
+    marginRight: 10,
   },
-  footer: {
+  categoryBadge: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderColor: '#eee',
-  },
-  button: {
-    flex: 1,
-    padding: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
-  deleteText: {
-    color: 'red',
-    fontSize: 16,
+  noteSection: {
+    width: '100%',
+    marginTop: 10,
   },
-  editText: {
-    color: 'blue',
-    fontSize: 16,
-  }
+  noteLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  noteBubble: {
+    borderLeftWidth: 4,
+    borderRadius: 8,
+    padding: 12,
+  },
+  noteText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
 });

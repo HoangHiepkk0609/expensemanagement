@@ -2,16 +2,17 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// Import Bộ Tab
 import MainTabs from './MainTabs';
 
-// Import các màn hình "ngoài Tab"
 import CategoryDetailScreen from '../screens/CategoryDetailScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
 import TransactionEditScreen from '../screens/TransactionEditScreen';
+import PeriodicExpenseReport from '../screens/PeriodicExpenseReport';
+import IncomeExpenseTrend from '../screens/IncomeExpenseTrend';
+import BudgetScreen from '../screens/BudgetScreen';
+import CategoryManagementScreen from '../screens/CategoryManagementScreen';
 
-// ✅ IMPORT CẢ HAI MÀN HÌNH
 import ImageExtractScreen from '../screens/ImageExtractScreen';
 import InvoiceScanner from '../screens/InvoiceScanner';
 
@@ -29,12 +30,19 @@ export type RootStackParamList = {
     onSave?: (updatedTransaction: any) => void;
   };
   
-  // ✅ THÊM TYPE CHO CẢ 2 MÀN HÌNH
   ImageExtract: {
     autoSelect?: boolean;
     invoiceData?: any;
   };
   InvoiceScanner: undefined;
+
+  PeriodicExpenseReport: undefined;
+
+  IncomeExpenseTrend: undefined;
+
+  BudgetScreen: undefined;
+
+  CategoryManagementScreen: undefined;
 };
 
 // Tạo Root Stack
@@ -98,6 +106,42 @@ export default function AppNavigator() {
             title: 'Quét hóa đơn',
             headerShown: true,
             presentation: 'modal',
+          }}
+        />
+
+        <RootStack.Screen
+          name="PeriodicExpenseReport"
+          component={PeriodicExpenseReport}
+          options={{
+            title: 'Báo cáo chi tiêu định kỳ',
+            headerShown: true,
+          }}
+        />
+
+        <RootStack.Screen
+          name="IncomeExpenseTrend"
+          component={IncomeExpenseTrend}
+          options={{
+            title: 'Biến động thu chi',
+            headerShown: false,
+          }}
+        />
+
+        <RootStack.Screen
+          name="BudgetScreen"
+          component={BudgetScreen}
+          options={{
+            title: 'Ngân sách chi tiêu',
+            headerShown: false,
+          }}
+        />
+
+        <RootStack.Screen
+          name="CategoryManagementScreen"
+          component={CategoryManagementScreen}
+          options={{
+            title: 'Quản lý danh mục',
+            headerShown: false,
           }}
         />
 
