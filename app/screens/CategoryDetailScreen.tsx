@@ -12,9 +12,8 @@ import { useRoute, useNavigation, NavigationProp, RouteProp, useFocusEffect } fr
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import { formatCurrency } from '../utils/formatCurrency';
-import { useTheme } from '../theme/themeContext'; // ✅ Import useTheme
+import { useTheme } from '../theme/themeContext'; 
 
-// --- CẤU HÌNH DANH MỤC MẶC ĐỊNH ---
 const DEFAULT_EXPENSE = [
   { label: 'Ăn uống', icon: 'silverware-fork-knife', color: '#FF6B6B' },
   { label: 'Mua sắm', icon: 'cart-outline', color: '#FFD93D' },
@@ -32,7 +31,6 @@ const DEFAULT_INCOME = [
 
 const ALL_DEFAULTS = [...DEFAULT_EXPENSE, ...DEFAULT_INCOME];
 
-// --- TYPES ---
 type Transaction = {
   id?: string | number;
   amount: number;
@@ -58,7 +56,6 @@ type CategoryTheme = {
   color: string;
 };
 
-// --- CHART COMPONENT (UI Biểu đồ) ---
 const WeeklyTrendChart = ({ data, color, textColor }: { data: { label: string, value: number }[], color: string, textColor: string }) => {
   const maxValue = Math.max(...data.map(d => d.value)) || 1; 
 
@@ -93,7 +90,6 @@ const WeeklyTrendChart = ({ data, color, textColor }: { data: { label: string, v
   );
 };
 
-// --- HELPER FUNCTIONS ---
 const getStartOfWeek = (date: Date) => {
     const d = new Date(date);
     const day = d.getDay();
@@ -143,7 +139,6 @@ const processWeeklyData = (transactions: Transaction[], selectedDate: Date) => {
     return result;
 };
 
-// --- HEADER COMPONENT (Có nút bấm chuyển tuần) ---
 interface HeaderProps {
     category: string;
     theme: CategoryTheme;
@@ -151,7 +146,7 @@ interface HeaderProps {
     currentDate: Date;
     onPrevWeek: () => void;
     onNextWeek: () => void;
-    colors: any; // ✅ Nhận colors từ parent
+    colors: any;
 }
 
 const ListHeader: React.FC<HeaderProps> = ({ category, theme, weeklyData, currentDate, onPrevWeek, onNextWeek, colors }) => {
@@ -203,9 +198,8 @@ const ListHeader: React.FC<HeaderProps> = ({ category, theme, weeklyData, curren
     );
 };
 
-// --- MAIN SCREEN ---
 const CategoryDetailScreen = () => {
-  const { colors, isDarkMode } = useTheme(); // ✅ Lấy colors
+  const { colors, isDarkMode } = useTheme(); 
   const route = useRoute<RouteProp<RootStackParamList, 'CategoryDetail'>>();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
@@ -239,7 +233,6 @@ const CategoryDetailScreen = () => {
       setCurrentDate(newDate);
   };
 
-  // Sync Theme logic
   useFocusEffect(
     useCallback(() => {
         const syncTheme = async () => {
@@ -261,7 +254,6 @@ const CategoryDetailScreen = () => {
     }, [category, paramIcon, paramColor])
   );
 
-  // Fetch Data logic
   useFocusEffect(
     useCallback(() => {
       const fetchData = async () => {
@@ -330,7 +322,7 @@ const CategoryDetailScreen = () => {
             currentDate={currentDate}
             onPrevWeek={handlePrevWeek}
             onNextWeek={handleNextWeek}
-            colors={colors} // ✅ Pass colors xuống
+            colors={colors} 
         />
       }
       ListEmptyComponent={
@@ -346,7 +338,6 @@ const CategoryDetailScreen = () => {
 
 export default CategoryDetailScreen;
 
-// --- STYLES ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,

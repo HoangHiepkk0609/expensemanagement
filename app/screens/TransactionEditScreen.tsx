@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   TextInput,
@@ -18,25 +17,34 @@ import { Picker } from '@react-native-picker/picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import firestore from '@react-native-firebase/firestore';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useTheme } from '../theme/themeContext';
+import auth from '@react-native-firebase/auth';
 
-type Category = { id: string; name: string; icon: string; };
+type Category = { 
+  id: string; 
+  name: string; 
+  label: string;
+  icon: string;
+  color?: string;
+  type?: string;
+};
+
 type Source = { id: string; name: string; icon: string; };
 type Props = NativeStackScreenProps<RootStackParamList, 'TransactionEdit'>;
 
-// ✅ DANH MỤC VỚI ICON ĐÚNG
-const expenseCategories: Category[] = [
-  { id: 'food', name: 'Ăn uống', icon: 'food-fork-drink' },
-  { id: 'shopping', name: 'Mua sắm', icon: 'cart' },
-  { id: 'transport', name: 'Di chuyển', icon: 'car' },
-  { id: 'friend', name: 'Người thân', icon: 'account-group' },
-  { id: 'other', name: 'Khác', icon: 'dots-grid' }
+const DEFAULT_EXPENSE_CATEGORIES: Category[] = [
+  { id: 'food', name: 'Ăn uống', label: 'Ăn uống', icon: 'food-fork-drink', color: '#FF6B6B' },
+  { id: 'shopping', name: 'Mua sắm', label: 'Mua sắm', icon: 'cart', color: '#FFD93D' },
+  { id: 'transport', name: 'Di chuyển', label: 'Di chuyển', icon: 'car', color: '#6BCB77' },
+  { id: 'friend', name: 'Người thân', label: 'Người thân', icon: 'account-group', color: '#4D96FF' },
+  { id: 'other', name: 'Khác', label: 'Khác', icon: 'dots-grid', color: '#9D9D9D' }
 ];
 
-const incomeCategories: Category[] = [
-  { id: 'salary', name: 'Lương', icon: 'cash' },
-  { id: 'business', name: 'Kinh doanh', icon: 'chart-line' },
-  { id: 'bonus', name: 'Thưởng', icon: 'gift' },
-  { id: 'other_income', name: 'Khác', icon: 'dots-grid' },
+const DEFAULT_INCOME_CATEGORIES: Category[] = [
+  { id: 'salary', name: 'Lương', label: 'Lương', icon: 'cash', color: '#4CAF50' },
+  { id: 'business', name: 'Kinh doanh', label: 'Kinh doanh', icon: 'chart-line', color: '#2196F3' },
+  { id: 'bonus', name: 'Thưởng', label: 'Thưởng', icon: 'gift', color: '#FFC107' },
+  { id: 'other_income', name: 'Khác', label: 'Khác', icon: 'dots-grid', color: '#9D9D9D' },
 ];
 
 const sources: Source[] = [
@@ -45,7 +53,6 @@ const sources: Source[] = [
   { id: 'bank', name: 'Ngân hàng', icon: '🏦' }
 ];
 
-// ✅ MÀU DANH MỤC
 const categoryColors: any = {
   'Ăn uống': '#FF6B6B',
   'Mua sắm': '#FFD93D',
@@ -58,7 +65,19 @@ const categoryColors: any = {
 };
 
 const TransactionEditScreen = ({ route, navigation }: Props) => {
+  const { colors, isDarkMode } = useTheme();
   const { transaction } = route.params;
+  const userId = auth().currentUser?.uid;
+  
+  const [expenseCategoriesList, setExpenseCategoriesList] = useState<Category[]>(DEFAULT_EXPENSE_CATEGORIES);
+  const [incomeCategoriesList, setIncomeCategoriesList] = useState<Category[]>(DEFAULT_INCOME_CATEGORIES);
+  const [showNotification, setShowNotification] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoriesToShow, setCategoriesToShow] = useState<Category[]>(
+    transaction.type === 'expense' ? expenseCategoriesList : incomeCategoriesList
+  );
+  const [selectedCategory, setSelectedCategory] = useState(transaction.category);
 
   const formatDisplayDate = (isoDateString: string) => {
     if (!isoDateString || isNaN(new Date(isoDateString).getTime())) {
@@ -95,19 +114,49 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
     note: transaction.note || '',
   });
 
-  const [showNotification, setShowNotification] = useState(false);
-  const [showWalletModal, setShowWalletModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [categoriesToShow, setCategoriesToShow] = useState<Category[]>(expenseCategories);
-
   useEffect(() => {
     const type = transaction.type || 'expense';
     if (type === 'income') {
-      setCategoriesToShow(incomeCategories);
+      setCategoriesToShow(incomeCategoriesList);
     } else {
-      setCategoriesToShow(expenseCategories);
+      setCategoriesToShow(expenseCategoriesList);
     }
-  }, [transaction]);
+  }, [transaction, expenseCategoriesList, incomeCategoriesList]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const subscriber = firestore()
+      .collection('user_categories')
+      .where('userId', '==', userId)
+      .onSnapshot(querySnapshot => {
+        const customExpense: Category[] = [];
+        const customIncome: Category[] = [];
+
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const item: Category = { 
+            id: doc.id, 
+            name: data.name || '',
+            label: data.label || data.name || '',
+            icon: data.icon || 'tag-outline',
+            color: data.color,
+            type: data.type
+          };
+
+          if (data.type === 'income') {
+            customIncome.push(item);
+          } else {
+            customExpense.push(item);
+          }
+        });
+
+        setExpenseCategoriesList([...DEFAULT_EXPENSE_CATEGORIES, ...customExpense]);
+        setIncomeCategoriesList([...DEFAULT_INCOME_CATEGORIES, ...customIncome]); 
+      });
+      
+    return () => subscriber();
+  }, [userId]);
 
   const handleSaveEdit = async () => {
     const amountAsNumber = parseFloat(editData.amount.replace(/\./g, ''));
@@ -116,7 +165,7 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
       return;
     }
 
-    const dataToSave = {
+    const dataToSave: any = {
       ...editData,
       amount: amountAsNumber,
       date: new Date(editData.date + 'T00:00:00').toISOString(),
@@ -146,9 +195,11 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
   const handleCategorySelect = (category: Category) => {
     setEditData({
       ...editData,
-      category: category.name,
+      category: category.label || category.name,
       categoryIcon: category.icon
     });
+    setSelectedCategory(category.label || category.name);
+    setShowCategoryModal(false);
   };
 
   const handleSourceSelect = (source: Source) => {
@@ -166,35 +217,43 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
   };
 
   return (
-    <View style={styles.safeArea}>
+    <View style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
           {/* Số tiền */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
+            <Text style={[styles.formLabel, { color: colors.text }]}>
               Số tiền<Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.amountInputWrapper}>
               <TextInput
-                style={styles.inputAmount}
+                style={[
+                  styles.inputAmount,
+                  { 
+                    color: colors.primary,
+                    borderBottomColor: colors.border,
+                    backgroundColor: colors.surface
+                  }
+                ]}
                 value={formatAmountInput(editData.amount)}
                 onChangeText={(text) => setEditData({ ...editData, amount: text.replace(/\./g, '') })}
                 placeholder="0"
+                placeholderTextColor={colors.textSecondary}
                 keyboardType="numeric"
               />
-              <Text style={styles.currencySymbol}>₫</Text>
+              <Text style={[styles.currencySymbol, { color: colors.textSecondary }]}>₫</Text>
             </View>
           </View>
 
-          {/* ✅ DANH MỤC - GIỐNG ADD SCREEN */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
+            <Text style={[styles.formLabel, { color: colors.text }]}>
               Danh mục<Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.categoryContainer}>
               {categoriesToShow.slice(0, 3).map((cat, index) => {
-                const catColor = categoryColors[cat.name] || '#9D9D9D';
-                const isSelected = editData.category === cat.name;
+                const catColor = cat.color || categoryColors[cat.name] || '#9D9D9D';
+                const catLabel = cat.label || cat.name;
+                const isSelected = editData.category === catLabel;
                 
                 return (
                   <TouchableOpacity
@@ -202,7 +261,14 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
                     onPress={() => handleCategorySelect(cat)}
                     style={[
                       styles.categoryButton,
-                      isSelected && styles.selectedCategory
+                      { 
+                        backgroundColor: colors.background,
+                        borderColor: colors.border
+                      },
+                      isSelected && { 
+                        backgroundColor: catColor + '15',
+                        borderColor: catColor
+                      }
                     ]}
                   >
                     <View style={[
@@ -215,37 +281,59 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
                         color={catColor}
                       />
                     </View>
-                    <Text style={styles.categoryText}>{cat.name}</Text>
+                    <Text style={[
+                      styles.categoryText, 
+                      { color: colors.text },
+                      isSelected && { fontWeight: '700', color: catColor }
+                    ]} numberOfLines={1}>
+                      {catLabel}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
               
-              {/* Nút Khác */}
-              <TouchableOpacity
-                style={[
-                  styles.categoryButton,
-                  editData.category && !categoriesToShow.slice(0, 3).find(c => c.name === editData.category) && styles.selectedCategory
-                ]}
-                onPress={() => setShowCategoryModal(true)}
-              >
-                <View style={[
-                  styles.categoryIconWrapper,
-                  { backgroundColor: '#9D9D9D20' }
-                ]}>
-                  <Icon
-                    name="dots-grid"
-                    size={24}
-                    color="#9D9D9D"
-                  />
-                </View>
-                <Text style={styles.categoryText}>
-                  {editData.category && !categoriesToShow.slice(0, 3).find(c => c.name === editData.category) ? editData.category : 'Khác'}
-                </Text>
-              </TouchableOpacity>
+              {(() => {
+                const top3Labels = categoriesToShow.slice(0, 3).map(c => c.label || c.name);
+                const isSelectedInTop3 = top3Labels.includes(editData.category);
+                const showSelectedCustom = editData.category && !isSelectedInTop3;
+                
+                const currentCategoryObj = categoriesToShow.find(c => (c.label || c.name) === editData.category);
+
+                const displayLabel = showSelectedCustom ? editData.category : 'Khác';
+                const displayIcon = showSelectedCustom ? (currentCategoryObj?.icon || 'tag-outline') : 'dots-grid';
+                const displayColor = showSelectedCustom ? (currentCategoryObj?.color || '#9D9D9D') : '#9D9D9D';
+
+                return (
+                  <TouchableOpacity 
+                    style={[
+                      styles.categoryButton,
+                      { backgroundColor: colors.background, borderColor: colors.border },
+                      showSelectedCustom && {
+                        backgroundColor: displayColor + '15', 
+                        borderColor: displayColor
+                      }
+                    ]}
+                    onPress={() => setShowCategoryModal(true)}
+                  >
+                    <View style={[styles.categoryIconWrapper, { backgroundColor: displayColor + '20' }]}>
+                      <Icon name={displayIcon} size={24} color={displayColor} />
+                    </View>
+                    <Text 
+                      style={[
+                        styles.categoryText, 
+                        { color: colors.text },
+                        showSelectedCustom && { fontWeight: '700', color: displayColor }
+                      ]} 
+                      numberOfLines={1}
+                    >
+                      {displayLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </View>
           </View>
 
-          {/* ✅ MODAL CHỌN DANH MỤC */}
           <Modal
             visible={showCategoryModal}
             transparent={true}
@@ -253,43 +341,42 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
             onRequestClose={() => setShowCategoryModal(false)}
           >
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Chọn danh mục</Text>
+              <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+                <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>Chọn danh mục</Text>
                   <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-                    <Icon name="close" size={24} color="#888" />
+                    <Icon name="close" size={24} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
                 <ScrollView>
-                  {categoriesToShow.map((item, index) => {
-                    const catColor = categoryColors[item.name] || '#9D9D9D';
-                    const isSelected = editData.category === item.name;
+                  {categoriesToShow.map((cat, index) => {
+                    const catLabel = cat.label || cat.name;
+                    const isSelected = editData.category === catLabel;
+                    const catColor = cat.color || categoryColors[cat.name] || '#9D9D9D';
                     
                     return (
                       <TouchableOpacity
-                        key={index}
-                        style={[styles.optionItem, isSelected && styles.selectedOption]}
-                        onPress={() => {
-                          handleCategorySelect(item);
-                          setShowCategoryModal(false);
-                        }}
+                        key={cat.id || index}
+                        style={[
+                          styles.optionItem,
+                          { borderBottomColor: colors.border },
+                          isSelected && { backgroundColor: catColor + '10' }
+                        ]}
+                        onPress={() => handleCategorySelect(cat)}
                       >
                         <View style={styles.optionContent}>
                           <View style={[
                             styles.optionIconWrapper,
                             { backgroundColor: catColor + '20' }
                           ]}>
-                            <Icon
-                              name={item.icon}
-                              size={22}
-                              color={catColor}
-                            />
+                            <Icon name={cat.icon} size={22} color={catColor} />
                           </View>
                           <Text style={[
                             styles.optionText,
-                            isSelected && styles.selectedOptionText
+                            { color: colors.text },
+                            isSelected && { color: catColor, fontWeight: '700' }
                           ]}>
-                            {item.name}
+                            {catLabel}
                           </Text>
                         </View>
                         {isSelected && (
@@ -303,39 +390,36 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
             </View>
           </Modal>
 
-          {/* Ngày giao dịch */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
+            <Text style={[styles.formLabel, { color: colors.text }]}>
               Ngày giao dịch<Text style={styles.required}>*</Text>
             </Text>
             <TouchableOpacity
-              style={styles.inputWithIcon}
+              style={[styles.inputWithIcon, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}
               onPress={() => Alert.alert("Thông báo", "Chức năng chọn ngày chưa được cài đặt.")}
             >
-              <Icon name="calendar-outline" size={20} color="#999" />
-              <Text style={styles.inputDate}>
+              <Icon name="calendar-outline" size={20} color={colors.textSecondary} />
+              <Text style={[styles.inputDate, { color: colors.text }]}>
                 {formatDisplayDate(editData.date)}
               </Text>
-              <ChevronDown size={20} color="#9CA3AF" />
+              <ChevronDown size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          {/* ✅ NGUỒN TIỀN - MODAL */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
+            <Text style={[styles.formLabel, { color: colors.text }]}>
               Nguồn tiền<Text style={styles.required}>*</Text>
             </Text>
             <TouchableOpacity
-              style={styles.inputWithIcon}
+              style={[styles.inputWithIcon, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}
               onPress={() => setShowWalletModal(true)}
             >
-              <Icon name="credit-card" size={20} color="#999" />
-              <Text style={styles.inputDate}>{editData.wallet}</Text>
-              <ChevronDown size={20} color="#9CA3AF" />
+              <Icon name="credit-card" size={20} color={colors.textSecondary} />
+              <Text style={[styles.inputDate, { color: colors.text }]}>{editData.wallet}</Text>
+              <ChevronDown size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          {/* ✅ MODAL NGUỒN TIỀN */}
           <Modal
             visible={showWalletModal}
             transparent={true}
@@ -343,11 +427,11 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
             onRequestClose={() => setShowWalletModal(false)}
           >
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Nguồn tiền</Text>
+              <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+                <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>Nguồn tiền</Text>
                   <TouchableOpacity onPress={() => setShowWalletModal(false)}>
-                    <Icon name="close" size={24} color="#888" />
+                    <Icon name="close" size={24} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
                 <ScrollView>
@@ -356,7 +440,11 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
                     return (
                       <TouchableOpacity
                         key={index}
-                        style={[styles.optionItem, isSelected && styles.selectedOption]}
+                        style={[
+                          styles.optionItem,
+                          { borderBottomColor: colors.border },
+                          isSelected && { backgroundColor: colors.primary + '15' }
+                        ]}
                         onPress={() => {
                           handleSourceSelect(src);
                           setShowWalletModal(false);
@@ -364,12 +452,13 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
                       >
                         <Text style={[
                           styles.optionText,
-                          isSelected && styles.selectedOptionText
+                          { color: colors.text },
+                          isSelected && { color: colors.primary, fontWeight: '700' }
                         ]}>
                           {src.name}
                         </Text>
                         {isSelected && (
-                          <Icon name="check" size={20} color="#FF69B4" />
+                          <Icon name="check" size={20} color={colors.primary} />
                         )}
                       </TouchableOpacity>
                     );
@@ -379,15 +468,21 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
             </View>
           </Modal>
 
-          {/* Ghi chú */}
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Ghi chú</Text>
+            <Text style={[styles.formLabel, { color: colors.text }]}>Ghi chú</Text>
             <TextInput
-              style={styles.inputNote}
+              style={[
+                styles.inputNote,
+                { 
+                  color: colors.text,
+                  borderBottomColor: colors.border,
+                  backgroundColor: colors.surface
+                }
+              ]}
               value={editData.note}
               onChangeText={(text) => setEditData({ ...editData, note: text })}
               placeholder="Thêm ghi chú..."
-              placeholderTextColor="#ccc"
+              placeholderTextColor={colors.textSecondary}
               multiline={true}
             />
           </View>
@@ -396,10 +491,13 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
         <View style={{ height: 30 }} />
       </ScrollView>
 
-      {/* Nút Lưu */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         <TouchableOpacity 
-          style={[styles.saveButton, transaction.type === 'income' && styles.saveButtonIncome]} 
+          style={[
+            styles.saveButton,
+            { backgroundColor: colors.primary },
+            transaction.type === 'income' && styles.saveButtonIncome
+          ]} 
           onPress={handleSaveEdit}
         >
           <Icon name="check" size={20} color="#fff" style={{ marginRight: 8 }} />
@@ -407,7 +505,6 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
         </TouchableOpacity>
       </View>
 
-      {/* Notification */}
       {showNotification && (
         <View style={styles.notification}>
           <Icon name="check-circle" size={24} color="#fff" style={{ marginRight: 8 }} />
@@ -418,14 +515,13 @@ const TransactionEditScreen = ({ route, navigation }: Props) => {
   );
 };
 
-export default TransactionEditScreen;
+
 
 const { width: screenWidth } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f7fa',
   },
   header: {
     flexDirection: 'row',
@@ -433,7 +529,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -450,16 +545,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1a1a1a',
     textAlign: 'center',
   },
   content: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#f5f7fa',
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
@@ -471,9 +563,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: 16,
-    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
     paddingBottom: Platform.OS === 'ios' ? 24 : 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
@@ -485,7 +575,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   formLabel: {
-    color: '#333',
     fontSize: 14,
     marginBottom: 10,
     fontWeight: '700',
@@ -498,13 +587,10 @@ const styles = StyleSheet.create({
   },
   inputAmount: {
     borderBottomWidth: 2,
-    borderBottomColor: '#f0f0f0',
     paddingVertical: 8,
     paddingHorizontal: 0,
     fontSize: 28,
     fontWeight: '700',
-    color: '#FF69B4',
-    backgroundColor: '#fff',
     textAlign: 'left',
   },
   currencySymbol: {
@@ -513,7 +599,6 @@ const styles = StyleSheet.create({
     top: Platform.OS === 'ios' ? 8 : 10,
     fontSize: 20,
     fontWeight: '700',
-    color: '#999',
   },
   categoryContainer: {
     flexDirection: 'row',
@@ -527,15 +612,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderRadius: 12,
-    backgroundColor: '#fafafa',
     borderWidth: 2,
-    borderColor: '#f0f0f0',
   },
-  selectedCategory: {
-    backgroundColor: '#fff0f5',
-    borderWidth: 2,
-    borderColor: '#FF69B4',
-  },
+  selectedCategory: {},
   categoryIconWrapper: {
     width: 50,
     height: 50,
@@ -546,7 +625,6 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 11,
-    color: '#666',
     textAlign: 'center',
     fontWeight: '500',
     marginTop: 2,
@@ -555,37 +633,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 2,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
     paddingVertical: 10,
     gap: 10,
   },
   inputDate: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
     fontWeight: '500',
   },
   inputNote: {
     borderBottomWidth: 2,
-    borderBottomColor: '#f0f0f0',
     paddingVertical: 12,
     paddingHorizontal: 0,
     fontSize: 16,
-    color: '#333',
-    backgroundColor: '#fff',
     minHeight: 60,
     textAlignVertical: 'top',
     fontWeight: '500',
   },
   saveButton: {
-    backgroundColor: '#FF69B4',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    shadowColor: '#FF69B4',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -629,7 +699,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '70%',
@@ -640,12 +709,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1a1a1a',
   },
   optionItem: {
     flexDirection: 'row',
@@ -654,11 +721,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
   },
-  selectedOption: {
-    backgroundColor: '#fff0f5',
-  },
+  selectedOption: {},
   optionContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -674,11 +738,9 @@ const styles = StyleSheet.create({
   },
   optionText: {
     fontSize: 16,
-    color: '#333',
     fontWeight: '500',
   },
-  selectedOptionText: {
-    color: '#FF69B4',
-    fontWeight: '700',
-  },
+  selectedOptionText: {},
 });
+
+export default TransactionEditScreen;

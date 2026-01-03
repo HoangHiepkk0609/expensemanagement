@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTransactions } from '../hook/useTransactions';
+import { useTheme } from '../theme/themeContext';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 40;
@@ -26,11 +27,11 @@ interface DayData {
 }
 
 export default function IncomeExpenseTrend({ navigation }: any) {
+  const { colors, isDarkMode } = useTheme(); 
   const { transactions, loading } = useTransactions();
   const [period, setPeriod] = useState<Period>('week');
   const [chartData, setChartData] = useState<DayData[]>([]);
 
-  // Tính toán dữ liệu biểu đồ
   useEffect(() => {
     if (transactions.length === 0) return;
 
@@ -38,7 +39,6 @@ export default function IncomeExpenseTrend({ navigation }: any) {
     let data: DayData[] = [];
 
     if (period === 'week') {
-      // 7 ngày gần nhất
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(now.getDate() - i);
@@ -68,7 +68,6 @@ export default function IncomeExpenseTrend({ navigation }: any) {
         });
       }
     } else if (period === 'month') {
-      // 4 tuần gần nhất
       for (let i = 3; i >= 0; i--) {
         const endDate = new Date(now);
         endDate.setDate(now.getDate() - (i * 7));
@@ -101,7 +100,6 @@ export default function IncomeExpenseTrend({ navigation }: any) {
         });
       }
     } else {
-      // 6 tháng gần nhất
       for (let i = 5; i >= 0; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
@@ -131,12 +129,10 @@ export default function IncomeExpenseTrend({ navigation }: any) {
     setChartData(data);
   }, [transactions, period]);
 
-  // Tính tổng
   const totalExpense = chartData.reduce((sum, d) => sum + d.expense, 0);
   const totalIncome = chartData.reduce((sum, d) => sum + d.income, 0);
   const balance = totalIncome - totalExpense;
 
-  // Tìm giá trị max để scale biểu đồ
   const maxValue = Math.max(
     ...chartData.map(d => Math.max(d.expense, d.income)),
     1
@@ -161,73 +157,109 @@ export default function IncomeExpenseTrend({ navigation }: any) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF69B4" />
-          <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Đang tải dữ liệu...
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={24} color="#333" />
+          <Icon name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Biến động thu chi</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Biến động thu chi</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Period Selector */}
         <View style={styles.periodSelector}>
           <TouchableOpacity
-            style={[styles.periodButton, period === 'week' && styles.periodButtonActive]}
+            style={[
+              styles.periodButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              period === 'week' && {
+                backgroundColor: colors.primary + '15',
+                borderColor: colors.primary
+              }
+            ]}
             onPress={() => setPeriod('week')}
           >
-            <Text style={[styles.periodText, period === 'week' && styles.periodTextActive]}>
+            <Text style={[
+              styles.periodText,
+              { color: colors.textSecondary },
+              period === 'week' && { color: colors.primary }
+            ]}>
               Tuần
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.periodButton, period === 'month' && styles.periodButtonActive]}
+            style={[
+              styles.periodButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              period === 'month' && {
+                backgroundColor: colors.primary + '15',
+                borderColor: colors.primary
+              }
+            ]}
             onPress={() => setPeriod('month')}
           >
-            <Text style={[styles.periodText, period === 'month' && styles.periodTextActive]}>
+            <Text style={[
+              styles.periodText,
+              { color: colors.textSecondary },
+              period === 'month' && { color: colors.primary }
+            ]}>
               Tháng
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.periodButton, period === 'year' && styles.periodButtonActive]}
+            style={[
+              styles.periodButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              period === 'year' && {
+                backgroundColor: colors.primary + '15',
+                borderColor: colors.primary
+              }
+            ]}
             onPress={() => setPeriod('year')}
           >
-            <Text style={[styles.periodText, period === 'year' && styles.periodTextActive]}>
+            <Text style={[
+              styles.periodText,
+              { color: colors.textSecondary },
+              period === 'year' && { color: colors.primary }
+            ]}>
               Năm
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Summary Cards */}
         <View style={styles.summaryContainer}>
-          <View style={[styles.summaryCard, styles.expenseCard]}>
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface }, styles.expenseCard]}>
             <Icon name="arrow-up-bold-circle" size={32} color="#EF4444" />
-            <Text style={styles.summaryLabel}>Chi tiêu</Text>
-            <Text style={styles.summaryAmount}>{formatFullCurrency(totalExpense)}</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Chi tiêu</Text>
+            <Text style={[styles.summaryAmount, { color: colors.text }]}>
+              {formatFullCurrency(totalExpense)}
+            </Text>
           </View>
 
-          <View style={[styles.summaryCard, styles.incomeCard]}>
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface }, styles.incomeCard]}>
             <Icon name="arrow-down-bold-circle" size={32} color="#10B981" />
-            <Text style={styles.summaryLabel}>Thu nhập</Text>
-            <Text style={styles.summaryAmount}>{formatFullCurrency(totalIncome)}</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Thu nhập</Text>
+            <Text style={[styles.summaryAmount, { color: colors.text }]}>
+              {formatFullCurrency(totalIncome)}
+            </Text>
           </View>
         </View>
 
-        <View style={[styles.summaryCard, styles.balanceCard]}>
+        <View style={[styles.summaryCard, { backgroundColor: colors.surface }, styles.balanceCard]}>
           <Icon name="wallet" size={32} color="#3B82F6" />
-          <Text style={styles.summaryLabel}>Chênh lệch</Text>
+          <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Chênh lệch</Text>
           <Text style={[
             styles.summaryAmount,
             { color: balance >= 0 ? '#10B981' : '#EF4444' }
@@ -236,38 +268,43 @@ export default function IncomeExpenseTrend({ navigation }: any) {
           </Text>
         </View>
 
-        {/* Chart */}
-        <View style={styles.chartCard}>
+        <View style={[styles.chartCard, { backgroundColor: colors.surface }]}>
           <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Biểu đồ chi tiêu & thu nhập</Text>
+            <Text style={[styles.chartTitle, { color: colors.text }]}>
+              Biểu đồ chi tiêu & thu nhập
+            </Text>
             <View style={styles.legend}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-                <Text style={styles.legendText}>Chi</Text>
+                <Text style={[styles.legendText, { color: colors.textSecondary }]}>Chi</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                <Text style={styles.legendText}>Thu</Text>
+                <Text style={[styles.legendText, { color: colors.textSecondary }]}>Thu</Text>
               </View>
             </View>
           </View>
 
           {chartData.length === 0 ? (
             <View style={styles.emptyChart}>
-              <Icon name="chart-bar" size={48} color="#D1D5DB" />
-              <Text style={styles.emptyText}>Chưa có dữ liệu</Text>
+              <Icon name="chart-bar" size={48} color={colors.border} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                Chưa có dữ liệu
+              </Text>
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.chartContainer}>
-                {/* Y-axis labels */}
                 <View style={styles.yAxis}>
-                  <Text style={styles.yAxisLabel}>{formatCurrency(maxValue)}</Text>
-                  <Text style={styles.yAxisLabel}>{formatCurrency(maxValue / 2)}</Text>
-                  <Text style={styles.yAxisLabel}>0</Text>
+                  <Text style={[styles.yAxisLabel, { color: colors.textSecondary }]}>
+                    {formatCurrency(maxValue)}
+                  </Text>
+                  <Text style={[styles.yAxisLabel, { color: colors.textSecondary }]}>
+                    {formatCurrency(maxValue / 2)}
+                  </Text>
+                  <Text style={[styles.yAxisLabel, { color: colors.textSecondary }]}>0</Text>
                 </View>
 
-                {/* Bars */}
                 <View style={styles.barsContainer}>
                   {chartData.map((item, index) => {
                     const expenseHeight = (item.expense / maxValue) * 150;
@@ -276,7 +313,6 @@ export default function IncomeExpenseTrend({ navigation }: any) {
                     return (
                       <View key={index} style={styles.barGroup}>
                         <View style={styles.bars}>
-                          {/* Expense bar */}
                           <View style={styles.barWrapper}>
                             <View
                               style={[
@@ -287,7 +323,6 @@ export default function IncomeExpenseTrend({ navigation }: any) {
                             />
                           </View>
 
-                          {/* Income bar */}
                           <View style={styles.barWrapper}>
                             <View
                               style={[
@@ -299,7 +334,9 @@ export default function IncomeExpenseTrend({ navigation }: any) {
                           </View>
                         </View>
 
-                        <Text style={styles.barLabel}>{item.label}</Text>
+                        <Text style={[styles.barLabel, { color: colors.textSecondary }]}>
+                          {item.label}
+                        </Text>
                       </View>
                     );
                   })}
@@ -309,14 +346,27 @@ export default function IncomeExpenseTrend({ navigation }: any) {
           )}
         </View>
 
-        {/* Insights */}
         {chartData.length > 0 && (
-          <View style={styles.insightCard}>
+          <View style={[
+            styles.insightCard,
+            { 
+              backgroundColor: isDarkMode ? '#854d0e20' : '#FFFBEB',
+              borderColor: isDarkMode ? '#854d0e' : '#FDE68A'
+            }
+          ]}>
             <View style={styles.insightHeader}>
               <Icon name="lightbulb" size={24} color="#F59E0B" />
-              <Text style={styles.insightTitle}>Nhận xét</Text>
+              <Text style={[
+                styles.insightTitle,
+                { color: isDarkMode ? '#FDE68A' : '#92400E' }
+              ]}>
+                Nhận xét
+              </Text>
             </View>
-            <Text style={styles.insightText}>
+            <Text style={[
+              styles.insightText,
+              { color: isDarkMode ? '#FDE68A' : '#78350F' }
+            ]}>
               {totalExpense > totalIncome
                 ? `Chi tiêu vượt thu nhập ${formatFullCurrency(totalExpense - totalIncome)}. Bạn nên cân nhắc tiết kiệm hơn.`
                 : totalIncome > totalExpense
@@ -333,7 +383,6 @@ export default function IncomeExpenseTrend({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
   },
   loadingContainer: {
     flex: 1,
@@ -343,7 +392,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#6B7280',
   },
   header: {
     flexDirection: 'row',
@@ -351,14 +399,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
   },
   periodSelector: {
     flexDirection: 'row',
@@ -370,23 +415,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
     alignItems: 'center',
   },
-  periodButtonActive: {
-    backgroundColor: '#FDF2F8',
-    borderColor: '#EC4899',
-  },
+  periodButtonActive: {},
   periodText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
   },
-  periodTextActive: {
-    color: '#EC4899',
-  },
+  periodTextActive: {},
   summaryContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -395,7 +432,6 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
@@ -424,17 +460,14 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 12,
-    color: '#6B7280',
     marginTop: 8,
     marginBottom: 4,
   },
   summaryAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1F2937',
   },
   chartCard: {
-    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 16,
@@ -454,7 +487,6 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
   },
   legend: {
     flexDirection: 'row',
@@ -472,7 +504,6 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 12,
-    color: '#6B7280',
   },
   emptyChart: {
     paddingVertical: 60,
@@ -481,7 +512,6 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#9CA3AF',
   },
   chartContainer: {
     flexDirection: 'row',
@@ -494,7 +524,6 @@ const styles = StyleSheet.create({
   },
   yAxisLabel: {
     fontSize: 10,
-    color: '#9CA3AF',
   },
   barsContainer: {
     flexDirection: 'row',
@@ -529,18 +558,15 @@ const styles = StyleSheet.create({
   },
   barLabel: {
     fontSize: 11,
-    color: '#6B7280',
     marginTop: 8,
     fontWeight: '500',
   },
   insightCard: {
-    backgroundColor: '#FFFBEB',
     marginHorizontal: 16,
     marginBottom: 24,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#FDE68A',
   },
   insightHeader: {
     flexDirection: 'row',
@@ -551,11 +577,9 @@ const styles = StyleSheet.create({
   insightTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#92400E',
   },
   insightText: {
     fontSize: 13,
-    color: '#78350F',
     lineHeight: 20,
   },
 });

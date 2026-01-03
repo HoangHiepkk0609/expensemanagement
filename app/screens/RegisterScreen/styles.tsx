@@ -1,8 +1,6 @@
 import { StyleSheet } from 'react-native';
-import { COLORS } from '../../theme/Colors'; // Import màu từ theme
+import { COLORS } from '../../theme/Colors';
 
-// Lưu ý: File này hiện tại giống hệt LoginScreen/styles.js
-// Sau này bạn có thể gộp chúng thành 1 file style dùng chung cho Auth
 const styles = StyleSheet.create({
   container: {
     flex: 1,

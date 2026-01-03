@@ -1,14 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView } from 'react-native';
-import styles from './styles'; // Import style từ file kế bên
+import { View, Text, TouchableOpacity } from 'react-native';
+import styles from './styles'; 
 
-// import Logo from '../../assets/logo.png'; 
 
 const WelcomeScreen = ({ navigation} : any) => {
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.content}>
-        {/* <Image source={Logo} style={styles.logo} /> */}
         <Text style={styles.title}>Chào mừng bạn!</Text>
         <Text style={styles.subtitle}>Quản lý chi tiêu cá nhân một cách thông minh.</Text>
       </View>
@@ -28,7 +26,7 @@ const WelcomeScreen = ({ navigation} : any) => {
           <Text style={styles.registerButtonText}>Tạo tài khoản mới</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

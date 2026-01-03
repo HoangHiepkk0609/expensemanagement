@@ -17,6 +17,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
+import auth from '@react-native-firebase/auth';
 
 const { height } = Dimensions.get('window');
 
@@ -53,18 +54,20 @@ const CategoryManagementScreen = () => {
   const [customCategories, setCustomCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // State cho Modal
   const [modalVisible, setModalVisible] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState(ICON_PICKER[0]);
   const [selectedColor, setSelectedColor] = useState(COLOR_PICKER[0]);
 
-  const TEST_USER_ID = 'my-test-user-id-123'; 
+  const userId = auth().currentUser?.uid;
+  if (!userId) {
+    return <Text>Vui lòng đăng nhập</Text>; 
+  } 
 
   useEffect(() => {
     const unsubscribe = firestore()
       .collection('user_categories')
-      .where('userId', '==', TEST_USER_ID)
+      .where('userId', '==', userId)
       .onSnapshot(snapshot => {
         const list: any[] = [];
         snapshot.forEach(doc => {
@@ -85,7 +88,7 @@ const CategoryManagementScreen = () => {
 
     try {
       await firestore().collection('user_categories').add({
-        userId: TEST_USER_ID,
+        userId: userId,
         label: newCatName,
         icon: selectedIcon,
         color: selectedColor,
@@ -183,16 +186,14 @@ const CategoryManagementScreen = () => {
         <Icon name="plus" size={30} color="#fff" />
       </TouchableOpacity>
 
-      {/* ✅ CẬP NHẬT: MODAL CÓ SCROLLVIEW ĐỂ KHÔNG BỊ KHUẤT */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        {/* KeyboardAvoidingView giúp đẩy input lên khi bàn phím hiện */}
+
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1 }}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              {/* Header của Modal */}
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Tạo danh mục {activeTab === 'expense' ? 'chi' : 'thu'}</Text>
                 <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -200,7 +201,6 @@ const CategoryManagementScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* ScrollView bao quanh nội dung form */}
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
                 
                 <Text style={styles.label}>Tên danh mục</Text>
@@ -237,12 +237,10 @@ const CategoryManagementScreen = () => {
                   ))}
                 </View>
 
-                {/* Nút Tạo nằm cuối ScrollView */}
                 <TouchableOpacity style={styles.saveButton} onPress={handleAddCategory}>
                   <Text style={styles.saveButtonText}>Tạo danh mục</Text>
                 </TouchableOpacity>
                 
-                {/* Khoảng trống đệm */}
                 <View style={{height: 20}} /> 
               </ScrollView>
             </View>
@@ -353,8 +351,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 0, // Bỏ padding đáy ở container, đẩy vào ScrollView
-    height: '85%', // Tăng chiều cao lên 85% cho thoải mái
+    paddingBottom: 0,
+    height: '85%',
   },
   modalHeader: {
     flexDirection: 'row',

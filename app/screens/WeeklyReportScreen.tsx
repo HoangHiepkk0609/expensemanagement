@@ -21,7 +21,6 @@ const WeeklyReportScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={26} color="#333" />
@@ -37,14 +36,12 @@ const WeeklyReportScreen = () => {
         </View>
       </View>
 
-      {/* Progress bar */}
       <View style={styles.progressRow}>
         {[1, 2, 3, 4, 5].map((i) => (
           <View key={i} style={i === 1 ? styles.progressActive : styles.progressInactive} />
         ))}
       </View>
 
-      {/* Icon image */}
       <View style={{ alignItems: 'center', marginTop: 18 }}>
         <Image
           source={{
@@ -54,13 +51,11 @@ const WeeklyReportScreen = () => {
         />
       </View>
 
-      {/* Text summary */}
       <Text style={styles.summaryText}>
         Bạn đã chi tiêu <Text style={styles.blue}>{totalSpend.toLocaleString()}đ</Text>. Ngày chi mạnh tay nhất
         là {maxDay} với <Text style={styles.red}>{maxDaySpend.toLocaleString()}đ</Text>
       </Text>
 
-      {/* Calendar card */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           {days.map((d) => (
@@ -84,13 +79,11 @@ const WeeklyReportScreen = () => {
         </View>
       </View>
 
-      {/* Switch */}
       <View style={styles.switchRow}>
         <Text style={styles.switchText}>Nhận báo cáo tổng quan chi tiêu hàng tuần</Text>
         <Switch value={true} onValueChange={() => {}} thumbColor="#fff" trackColor={{ true: "#30D158" }} />
       </View>
 
-      {/* Bottom illustration */}
       <Image
         source={{
           uri: 'https://cdn-icons-png.flaticon.com/512/9111/9111962.png',
@@ -101,7 +94,7 @@ const WeeklyReportScreen = () => {
   );
 };
 
-export default WeeklyReportScreen;
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFEFF5' },
@@ -147,8 +140,14 @@ const styles = StyleSheet.create({
     color: '#444',
     lineHeight: 22,
   },
-  blue: { color: '#0099FF', fontWeight: 'bold' },
-  red: { color: '#FF613A', fontWeight: 'bold' },
+  blue: { 
+    color: '#0099FF', 
+    fontWeight: 'bold' 
+  },
+  red: { 
+    color: '#FF613A', 
+    fontWeight: 'bold' 
+  },
 
   card: {
     backgroundColor: '#fff',
@@ -172,7 +171,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  dateItem: { width: 40, alignItems: 'center' },
+  dateItem: { 
+    width: 40, 
+    alignItems: 'center'
+   },
 
   highlightBox: {
     backgroundColor: '#FFF4E8',
@@ -181,10 +183,21 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
-  highlightDay: { color: '#FF7A00', fontSize: 16, fontWeight: '700' },
-  highlightAmount: { color: '#FF7A00', fontSize: 12, marginTop: 2 },
+  highlightDay: { 
+    color: '#FF7A00', 
+    fontSize: 16, 
+    fontWeight: '700' 
+  },
+  highlightAmount: { 
+    color: '#FF7A00', 
+    fontSize: 12, 
+    marginTop: 2 
+  },
 
-  normalDate: { fontSize: 16, color: '#555' },
+  normalDate: { 
+    fontSize: 16, 
+    color: '#555' 
+  },
 
   switchRow: {
     flexDirection: 'row',
@@ -193,7 +206,11 @@ const styles = StyleSheet.create({
     marginTop: 14,
     alignItems: 'center',
   },
-  switchText: { fontSize: 14, color: '#666', flex: 1 },
+  switchText: { 
+    fontSize: 14,
+    color: '#666', 
+    flex: 1 
+  },
 
   bottomImage: {
     width: '90%',
@@ -204,3 +221,5 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
 });
+
+export default WeeklyReportScreen;

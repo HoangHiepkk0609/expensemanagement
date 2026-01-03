@@ -4,7 +4,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-// Import các màn hình dùng trong Tab
 import CalendarScreen from '../screens/CalendarScreen';
 import UtilitiesScreen from '../screens/UtilitiesScreen';
 import NimoScreen from '../screens/NimoScreen';
@@ -13,15 +12,11 @@ import ImageInputScreen from '../screens/ImageExtractScreen';
 import OverviewScreen from '../screens/OverviewScreen';
 import CategoryDetailScreen from '../screens/CategoryDetailScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
-
-// 1. Import Hook Theme
-import { useTheme } from '../theme/themeContext'; // Đảm bảo đúng đường dẫn file ThemeContext
+import { useTheme } from '../theme/themeContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// ... (Giữ nguyên các hàm HomeStack, CalendarStack, AddTransactionStack) ...
-// Stack cho tab Tổng quan
 function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -40,7 +35,6 @@ function HomeStack() {
   );
 }
 
-// Stack cho tab Lịch
 function CalendarStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -49,7 +43,6 @@ function CalendarStack() {
   );
 }
 
-// Stack cho tab Ghi chép GD (AddTransaction + ImageInput)
 function AddTransactionStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -59,33 +52,29 @@ function AddTransactionStack() {
   );
 }
 
-// --- Component MainTabs (ĐÃ SỬA) ---
 function MainTabs() {
-  // 2. Lấy bộ màu từ Theme
   const { colors, isDarkMode } = useTheme();
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        // 3. Cập nhật Style động theo màu Theme
         tabBarStyle: {
           height: 70,
           paddingBottom: 10,
           paddingTop: 8,
           borderTopWidth: 1,
-          backgroundColor: colors.surface, // ✅ Nền Tab đổi màu (Trắng/Đen xám)
-          borderTopColor: colors.border,   // ✅ Viền trên đổi màu
+          backgroundColor: colors.surface, 
+          borderTopColor: colors.border, 
         },
-        tabBarActiveTintColor: colors.primary, // ✅ Màu icon khi chọn (Hồng)
-        tabBarInactiveTintColor: colors.textSecondary, // ✅ Màu icon khi chưa chọn
+        tabBarActiveTintColor: colors.primary, 
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarLabelStyle: {
           fontSize: 11,
           marginTop: 4,
         },
       }}
     >
-      {/* Tab Tổng quan */}
       <Tab.Screen
         name="Home"
         component={HomeStack}
@@ -97,7 +86,6 @@ function MainTabs() {
         }}
       />
 
-      {/* Tab Lịch */}
       <Tab.Screen
         name="Calendar"
         component={CalendarStack}
@@ -109,17 +97,15 @@ function MainTabs() {
         }}
       />
 
-      {/* Tab Nhập (Nút giữa nổi lên) */}
       <Tab.Screen
         name="AddTransactionTab"
         component={AddTransactionStack}
         options={{
           tabBarLabel: 'Nhập',
-          tabBarStyle: { display: 'none' }, // Ẩn tab bar khi vào màn hình nhập
+          tabBarStyle: { display: 'none' }, 
           tabBarIcon: () => (
             <View style={[
                 styles.addButton, 
-                // ✅ Đổi màu nút giữa (nếu muốn nó tối đi khi Dark mode, hoặc giữ nguyên màu hồng)
                 { backgroundColor: colors.primary, shadowColor: colors.primary } 
             ]}>
               <Icon name="plus" size={30} color="#fff" />
@@ -128,7 +114,6 @@ function MainTabs() {
         }}
       />
 
-      {/* Tab Nimo */}
       <Tab.Screen
         name="Nimo"
         component={NimoScreen}
@@ -140,7 +125,6 @@ function MainTabs() {
         }}
       />
 
-      {/* Tab Tiện ích */}
       <Tab.Screen
         name="Utilities"
         component={UtilitiesScreen}
@@ -155,13 +139,11 @@ function MainTabs() {
   );
 }
 
-// --- Styles tĩnh (Chỉ giữ lại những cái không đổi màu) ---
 const styles = StyleSheet.create({
   addButton: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    // backgroundColor và shadowColor đã chuyển vào inline style ở trên để dùng Theme
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: -28,

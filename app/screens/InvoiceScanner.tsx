@@ -14,7 +14,6 @@ import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-// Type cho navigation
 type RootStackParamList = {
   AddTransactionModal: {
     invoiceData?: any;
@@ -25,7 +24,6 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-// Props interface
 interface InvoiceScannerProps {
   onDataExtracted?: (data: any, imageUri: string) => void;
   onCancel?: () => void;
@@ -38,7 +36,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [rawText, setRawText] = useState('');
 
-  // Chọn ảnh từ thư viện
   const pickImageFromLibrary = async () => {
     try {
       const result = await launchImageLibrary({
@@ -66,7 +63,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
     }
   };
 
-  // Xử lý ảnh với ML Kit
   const processImage = async (imageUri: string) => {
     setImage(imageUri);
     setLoading(true);
@@ -74,12 +70,10 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
     setRawText('');
 
     try {
-      // Nhận dạng text từ ảnh
       const result = await TextRecognition.recognize(imageUri);
       
       setRawText(result.text);
       
-      // Parse thông tin hóa đơn
       const parsed = parseInvoiceData(result.text);
       setInvoiceData(parsed);
       
@@ -91,7 +85,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
     }
   };
 
-  // Phân tích text để lấy thông tin hóa đơn
   const parseInvoiceData = (text: string) => {
     const lines = text.split('\n').filter(line => line.trim());
     
@@ -110,68 +103,58 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
       paymentMethod: '',
     };
 
-    // Lấy tên cửa hàng (thường ở dòng đầu tiên)
     if (lines.length > 0) {
       data.storeName = lines[0].trim();
     }
 
-    // Tìm số điện thoại
     const phoneRegex = /(?:0|\+84)[3|5|7|8|9][0-9]{8}/;
     const phoneMatch = text.match(phoneRegex);
     if (phoneMatch) {
       data.phone = phoneMatch[0];
     }
 
-    // Tìm ngày tháng
     const dateRegex = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/;
     const dateMatch = text.match(dateRegex);
     if (dateMatch) {
       data.date = dateMatch[1];
     }
 
-    // Tìm giờ
     const timeRegex = /(\d{1,2}:\d{2}(?::\d{2})?(?:\s?[AP]M)?)/i;
     const timeMatch = text.match(timeRegex);
     if (timeMatch) {
       data.time = timeMatch[1];
     }
 
-    // Tìm tổng tiền
     const totalRegex = /(?:tổng|total|t.ng c.ng|thanh toán|amount)[\s:]*([0-9.,]+)/i;
     const totalMatch = text.match(totalRegex);
     if (totalMatch) {
       data.total = cleanNumber(totalMatch[1]);
     }
 
-    // Tìm tiền hàng
     const subtotalRegex = /(?:tiền hàng|subtotal|ti.n hàng)[\s:]*([0-9.,]+)/i;
     const subtotalMatch = text.match(subtotalRegex);
     if (subtotalMatch) {
       data.subtotal = cleanNumber(subtotalMatch[1]);
     }
 
-    // Tìm thuế/VAT
     const taxRegex = /(?:thuế|tax|vat)[\s:]*([0-9.,]+)/i;
     const taxMatch = text.match(taxRegex);
     if (taxMatch) {
       data.tax = cleanNumber(taxMatch[1]);
     }
 
-    // Tìm phương thức thanh toán
     const paymentRegex = /(?:tiền mặt|cash|chuyển khoản|transfer|card|thẻ)/i;
     const paymentMatch = text.match(paymentRegex);
     if (paymentMatch) {
       data.paymentMethod = paymentMatch[0];
     }
 
-    // Tìm địa chỉ
     const addressRegex = /(?:địa chỉ|address|đ\/c)[\s:]*([^\n]+)/i;
     const addressMatch = text.match(addressRegex);
     if (addressMatch) {
       data.address = addressMatch[1].trim();
     }
 
-    // Tìm các món hàng
     const itemRegex = /^(.+?)\s+(\d+)\s*x?\s*([0-9.,]+)/gm;
     let itemMatch;
     while ((itemMatch = itemRegex.exec(text)) !== null) {
@@ -185,12 +168,10 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
     return data;
   };
 
-  // Làm sạch số
   const cleanNumber = (numStr: string): string => {
     return numStr.replace(/[.,\s]/g, '');
   };
 
-  // Format số tiền
   const formatCurrency = (amount: string | number): string => {
     if (!amount) return '';
     const num = typeof amount === 'string' ? parseInt(amount) : amount;
@@ -198,7 +179,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
     return new Intl.NumberFormat('vi-VN').format(num) + ' ₫';
   };
 
-  // Xử lý sử dụng dữ liệu
   const handleUseData = () => {
     if (!invoiceData) {
       Alert.alert('Lỗi', 'Chưa có dữ liệu để sử dụng');
@@ -206,10 +186,8 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
     }
 
     if (onDataExtracted) {
-      // Nếu được gọi từ Modal/Component
       onDataExtracted(invoiceData, image || '');
     } else if (navigation.canGoBack()) {
-      // Nếu được gọi từ Navigation
       navigation.navigate('AddTransactionModal', {
         invoiceData: invoiceData,
         imageUri: image || undefined,
@@ -220,7 +198,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
     }
   };
 
-  // Hủy và quay lại
   const handleCancel = () => {
     if (onCancel) {
       onCancel();
@@ -235,7 +212,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
         <Text style={styles.title}>Quét Hóa Đơn</Text>
       </View>
 
-      {/* Button */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity 
           style={styles.button} 
@@ -245,14 +221,12 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
         </TouchableOpacity>
       </View>
 
-      {/* Image Preview */}
       {image && (
         <View style={styles.imageContainer}>
           <Image source={{ uri: image }} style={styles.image} />
         </View>
       )}
 
-      {/* Loading */}
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
@@ -260,7 +234,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
         </View>
       )}
 
-      {/* Results */}
       {invoiceData && !loading && (
         <View style={styles.resultContainer}>
           <Text style={styles.sectionTitle}>📋 Thông tin hóa đơn</Text>
@@ -300,7 +273,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
             </View>
           )}
 
-          {/* Items */}
           {invoiceData?.items && invoiceData.items.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>🛒 Danh sách món</Text>
@@ -315,7 +287,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
             </>
           )}
 
-          {/* Totals */}
           <View style={styles.divider} />
 
           {invoiceData?.subtotal && (
@@ -346,7 +317,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
             </View>
           )}
 
-          {/* Raw Text */}
           <TouchableOpacity 
             style={styles.rawTextButton}
             onPress={() => Alert.alert('Text gốc', rawText)}
@@ -354,7 +324,6 @@ const InvoiceScanner: React.FC<InvoiceScannerProps> = ({ onDataExtracted, onCanc
             <Text style={styles.rawTextButtonText}>Xem text gốc</Text>
           </TouchableOpacity>
 
-          {/* Action Buttons */}
           <View style={styles.actionButtons}>
             <TouchableOpacity 
               style={[styles.actionButton, styles.cancelButton]}

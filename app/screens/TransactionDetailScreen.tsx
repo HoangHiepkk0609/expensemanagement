@@ -4,11 +4,10 @@ import { NavigationProp, RouteProp, useNavigation, useRoute } from '@react-navig
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { formatCurrency } from '../utils/formatCurrency'; 
 import firestore from '@react-native-firebase/firestore';
-import { useTheme } from '../theme/themeContext'; // ✅ Import useTheme
+import { useTheme } from '../theme/themeContext';
 
 const { width } = Dimensions.get('window');
 
-// --- Định nghĩa type ---
 type Transaction = {
   id: string | number;
   type: 'expense' | 'income';
@@ -34,7 +33,6 @@ const formatTransactionDate = (dateString: string | Date) => {
   return new Date(date).toLocaleDateString('vi-VN', options);
 };
 
-// --- Mapping icon và màu ---
 const categoryIcons: any = {
   'Ăn uống': 'silverware-fork-knife', 'Mua sắm': 'cart-outline', 'Di chuyển': 'car',
   'Người thân': 'human-handsup', 'Khác': 'dots-grid', 'Lương': 'cash-marker',
@@ -47,7 +45,6 @@ const categoryColors: any = {
   'Kinh doanh': '#2196F3', 'Thưởng': '#FFC107',
 };
 
-// --- Component InfoRow ---
 const InfoRow = ({ label, value, icon, valueColor, isCategory, colors }: any) => {
   return (
     <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
@@ -79,9 +76,8 @@ const InfoRow = ({ label, value, icon, valueColor, isCategory, colors }: any) =>
   );
 };
 
-// --- Màn hình chính ---
 const TransactionDetailScreen = () => {
-  const { colors, isDarkMode } = useTheme(); // ✅ Lấy colors
+  const { colors, isDarkMode } = useTheme(); 
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'TransactionDetail'>>();
  
@@ -92,13 +88,11 @@ const TransactionDetailScreen = () => {
   const isExpense = type === 'expense';
   const amountColor = isExpense ? '#FF6B6B' : '#4CAF50';
   const headerBgColor = isExpense ? '#FFE6E6' : '#E6F7E6';
-  
-  // ✅ Header background color cho dark mode
+
   const headerBgColorDark = isExpense 
     ? (isDarkMode ? '#4a2020' : '#FFE6E6')
     : (isDarkMode ? '#1a3a1a' : '#E6F7E6');
 
-  // Hàm xử lý
   const handleDeletePress = () => {
     Alert.alert(
       "Xác nhận xoá",
@@ -126,7 +120,6 @@ const TransactionDetailScreen = () => {
     navigation.navigate('TransactionEdit', { transaction: transaction });
   };
 
-  // ✅ useLayoutEffect - Thêm nút vào header
   useLayoutEffect(() => {
     navigation.setOptions({
       headerTitle: 'Chi tiết giao dịch',
@@ -135,9 +128,9 @@ const TransactionDetailScreen = () => {
         elevation: 0,
         shadowOpacity: 0,
       },
-      headerTintColor: colors.text, // ✅ Màu nút back
+      headerTintColor: colors.text, 
       headerTitleStyle: {
-        color: colors.text, // ✅ Màu title
+        color: colors.text, 
       },
       headerRight: () => (
         <View style={styles.headerButtonsContainer}>
@@ -155,11 +148,9 @@ const TransactionDetailScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Background cong phía sau */}
       <View style={[styles.headerBackground, { backgroundColor: headerBgColorDark }]} />
       
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Card Chính */}
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
           <View style={[styles.iconCircle, { backgroundColor: categoryColors[category] + '20' }]}>
             <Icon 
@@ -218,8 +209,6 @@ const TransactionDetailScreen = () => {
     </View>
   );
 };
-
-export default TransactionDetailScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -332,3 +321,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+export default TransactionDetailScreen;

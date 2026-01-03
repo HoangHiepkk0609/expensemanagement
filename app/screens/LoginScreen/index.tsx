@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
-import styles from './styles'; // Import style từ file kế bên
+import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
+import styles from './styles'; 
 
-// 1. Import Firebase Auth
 import auth from '@react-native-firebase/auth';
-
-// 2. Không cần import useAuth nữa vì AuthContext tự lắng nghe
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -17,18 +14,13 @@ const LoginScreen = ({ navigation }: any) => {
       return;
     }
 
-    // 3. Gọi hàm đăng nhập của Firebase
     auth()
       .signInWithEmailAndPassword(email, password)
       .then((userCredential) => {
-        // Đăng nhập thành công!
         console.log('Người dùng đã đăng nhập:', userCredential.user.email);
         
-        // KHÔNG CẦN GỌI login() ở đây.
-        // AuthContext sẽ tự động phát hiện và chuyển màn hình.
       })
       .catch(error => {
-        // 4. Xử lý lỗi đăng nhập
         if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
           Alert.alert('Lỗi', 'Email hoặc mật khẩu không đúng.');
         } else if (error.code === 'auth/user-not-found') {
@@ -41,14 +33,14 @@ const LoginScreen = ({ navigation }: any) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <Text style={styles.authTitle}>Đăng nhập</Text>
       
       <TextInput
         style={styles.input}
         placeholder="Email của bạn"
         keyboardType="email-address"
-        autoCapitalize="none" // <-- Thêm vào để tránh lỗi gõ
+        autoCapitalize="none" 
         value={email}
         onChangeText={setEmail}
       />
@@ -67,7 +59,7 @@ const LoginScreen = ({ navigation }: any) => {
       <TouchableOpacity onPress={() => navigation.navigate('Register')}>
         <Text style={styles.secondaryText}>Chưa có tài khoản? Đăng ký ngay</Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 };
 

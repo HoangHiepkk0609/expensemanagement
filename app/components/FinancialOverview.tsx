@@ -9,7 +9,6 @@ const FinancialOverview = () => {
 
   return (
     <View style={styles.container}>
-      {/* MoMo Payment Banner */}
       <View style={styles.momoBanner}>
         <View style={styles.momoIcon}>
           <Icon name="wallet" size={24} color="#B5179E" />
@@ -19,11 +18,9 @@ const FinancialOverview = () => {
         </Text>
       </View>
 
-      {/* Financial Overview Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Bức tranh tài chính</Text>
 
-        {/* Financial Center Card */}
         <TouchableOpacity style={styles.card}>
           <View style={styles.cardLeft}>
             <View style={styles.iconContainer}>
@@ -47,7 +44,6 @@ const FinancialOverview = () => {
           <Icon name="chevron-right" size={24} color="#999" />
         </TouchableOpacity>
 
-        {/* Savings Card */}
         <TouchableOpacity style={styles.card}>
           <View style={styles.cardLeft}>
             <View style={[styles.iconContainer, styles.iconPink]}>
@@ -74,7 +70,6 @@ const FinancialOverview = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Info Banner */}
       <View style={styles.infoBanner}>
         <Icon name="information-outline" size={16} color="#666" />
         <Text style={styles.infoText}>

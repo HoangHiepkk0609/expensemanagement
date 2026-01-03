@@ -14,14 +14,13 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import auth from '@react-native-firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator'; // Đảm bảo đường dẫn đúng
-import { useTransactions } from '../hook/useTransactions'; // Đảm bảo đường dẫn đúng
-import { getRecentWeeks, calculateReport } from '../utils/reportUtils'; // Đảm bảo đường dẫn đúng
+import { RootStackParamList } from '../navigation/AppNavigator';
+import { useTransactions } from '../hook/useTransactions'; 
+import { getRecentWeeks, calculateReport } from '../utils/reportUtils';
 import NotificationHelper from '../utils/NotificationHelper';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // Để lưu trạng thái bật/tắt
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import { useTheme } from '../theme/themeContext';
 
-// Định nghĩa type cho navigation
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const UtilitiesScreen = () => {
@@ -30,14 +29,12 @@ const UtilitiesScreen = () => {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [isEnabled, setIsEnabled] = useState(false);
   
-  // State cho báo cáo
   const [weekReports, setWeekReports] = useState<any[]>([]);
   const { isDarkMode, toggleTheme, colors } = useTheme();
 
-  // Tính toán báo cáo khi có transactions
   useEffect(() => {
     if (transactions.length > 0) {
-      const weeks = getRecentWeeks(2); // Lấy 2 tuần gần nhất
+      const weeks = getRecentWeeks(2);
       const reports = weeks.map((week, index) => {
         const previousWeek = weeks[index + 1];
         const report = calculateReport(
@@ -56,12 +53,10 @@ const UtilitiesScreen = () => {
     }
   }, [transactions]);
 
-  // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
   };
 
-  // HÀM XỬ LÝ ĐĂNG XUẤT
   const handleLogout = () => {
     Alert.alert(
       "Đăng xuất",
@@ -81,7 +76,6 @@ const UtilitiesScreen = () => {
     );
   };
 
-  // Load trạng thái đã lưu khi mở màn hình
   useEffect(() => {
     loadSettings();
   }, []);
@@ -95,24 +89,19 @@ const UtilitiesScreen = () => {
     }
   };
 
-  // Hàm xử lý khi bấm nút Switch
   const toggleSwitch = async () => {
     const newState = !isEnabled;
     setIsEnabled(newState);
     
-    // Lưu vào bộ nhớ máy
     await AsyncStorage.setItem('DAILY_REMINDER_ENABLED', String(newState));
 
     if (newState) {
-      // ✅ NẾU BẬT: Gọi hàm lên lịch
       await NotificationHelper.scheduleDailyReminder();
     } else {
-      // ❌ NẾU TẮT: Gọi hàm hủy
       await NotificationHelper.cancelDailyReminder();
     }
   };
 
-  // --- HÀM XỬ LÝ KHI BẤM VÀO TIỆN ÍCH (ĐÃ CẬP NHẬT) ---
   const handleItemPress = (item: any) => {
     if (item.id === 'logout') {
       handleLogout();
@@ -147,31 +136,13 @@ const UtilitiesScreen = () => {
     {
       id: 3,
       icon: 'wallet',
-      title: 'Ngân sách\nchi tiêu', // ✅ Đây là mục Ngân sách
+      title: 'Ngân sách\nchi tiêu',
       color: '#4DD0E1',
     },
     {
       id: 4,
       icon: 'folder',
       title: 'Quản lý\ndanh mục',
-      color: '#4DD0E1',
-    },
-    {
-      id: 5,
-      icon: 'tag',
-      title: 'Phân loại\ngiao dịch',
-      color: '#4DD0E1',
-    },
-    {
-      id: 6,
-      icon: 'calendar-month',
-      title: 'Nhìn lại\ntháng 9',
-      color: '#4DD0E1',
-    },
-    {
-      id: 7,
-      icon: 'calculator',
-      title: 'Hạn mức\ngiao dịch',
       color: '#4DD0E1',
     },
     {
@@ -185,22 +156,12 @@ const UtilitiesScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       
-      {/* 1. Header (Áp dụng màu nền động) */}
       <View style={[styles.header, { backgroundColor: isDarkMode ? colors.surface : '#FFD6E8' }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Tiện ích</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="wallet-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="home-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Tiện ích</Text>       
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
         
-        {/* 2. Card Cài đặt Dark Mode */}
         <View style={[styles.reportSection, { backgroundColor: colors.surface }]}>
            <View style={styles.row}>
               <View style={styles.left}>
@@ -221,7 +182,6 @@ const UtilitiesScreen = () => {
            </View>
         </View>
 
-        {/* 3. Báo cáo chi tiêu (Áp dụng màu surface và text) */}
         <View style={[styles.reportSection, { backgroundColor: colors.surface }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Báo cáo chi tiêu định kỳ</Text>
           
@@ -235,14 +195,12 @@ const UtilitiesScreen = () => {
               <View style={styles.reportCards}>
                 {weekReports.length > 0 ? (
                   <>
-                    {/* Các Card con bên trong */}
                     {weekReports.map((report, index) => (
                         <TouchableOpacity 
                           key={index}
                           style={[
                               styles.reportCard, 
                               index === 1 && styles.reportCardRight,
-                              // Nếu Dark Mode thì làm màu nền card con tối hơn chút hoặc sáng hơn chút tùy gu
                               { 
                                   backgroundColor: isDarkMode ? colors.background : '#FFF5F8',
                                   borderColor: isDarkMode ? colors.border : '#FFE0ED'
@@ -276,7 +234,6 @@ const UtilitiesScreen = () => {
                 )}
               </View>
 
-              {/* Notification Toggle */}
               <View style={[styles.notificationRow, { borderTopColor: colors.border }]}>
                 <Text style={[styles.notificationText, { color: colors.text }]}>Nhận thông báo khi có báo cáo chi tiêu</Text>
                 <Switch
@@ -290,7 +247,6 @@ const UtilitiesScreen = () => {
           )}
         </View>
 
-        {/* 4. Tiện ích nâng cao */}
         <View style={[styles.utilitiesSection, { backgroundColor: colors.surface }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Tiện ích nâng cao</Text>
           
@@ -318,6 +274,7 @@ const UtilitiesScreen = () => {
     </SafeAreaView>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

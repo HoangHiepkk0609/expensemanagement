@@ -1,9 +1,4 @@
-// /src/constants/categories.ts
-
-// 1. Định nghĩa "Từ điển" icon và màu sắc
-// Đây là nơi duy nhất bạn quyết định "Ăn uống" dùng icon gì
 const CATEGORY_STYLES: { [key: string]: { icon: string; color: string } } = {
-  // --- CHI TIÊU (EXPENSE) ---
   'Ăn uống':    { icon: 'silverware-fork-knife', color: '#FF6B6B' },
   'Mua sắm':    { icon: 'cart-outline',          color: '#FFD93D' },
   'Người thân': { icon: 'human-handsup',         color: '#4D96FF' },
@@ -15,18 +10,13 @@ const CATEGORY_STYLES: { [key: string]: { icon: string; color: string } } = {
   'Sức khỏe':   { icon: 'hospital-box',          color: '#1ABC9C' },
   'Học tập':   { icon: 'book-outline',          color: '#3498DB' },
   'Đầu tư':    { icon: 'trending-up',           color: '#2ECC71' },
-
-  // --- THU NHẬP (INCOME) ---
   'Lương':      { icon: 'cash-marker',     color: '#4CAF50' },
   'Kinh doanh': { icon: 'chart-line',      color: '#2196F3' },
   'Thưởng':     { icon: 'wallet-giftcard', color: '#FFC107' },
-
-  // --- MẶC ĐỊNH / TÙY CHỈNH ---
   'Khác':       { icon: 'dots-grid',       color: '#9D9D9D' },
-  'custom':     { icon: 'tag-outline',     color: '#8E44AD' }, // Dành cho danh mục bạn tự tạo
+  'custom':     { icon: 'tag-outline',     color: '#8E44AD' }, 
 };
 
-// 2. Hàm helper để lấy thông tin (Quan trọng nhất)
 export const getCategoryIcon = (categoryName: string): string => {
   return CATEGORY_STYLES[categoryName]?.icon || CATEGORY_STYLES['custom'].icon;
 };
@@ -35,25 +25,17 @@ export const getCategoryColor = (categoryName: string): string => {
   return CATEGORY_STYLES[categoryName]?.color || CATEGORY_STYLES['custom'].color;
 };
 
-// 3. Export mảng mặc định để dùng trong Modal "Chọn danh mục"
 export const DEFAULT_EXPENSE_CATEGORIES = [
-  { label: 'Ăn uống',    icon: CATEGORY_STYLES['Ăn uống'].icon },
-  { label: 'Mua sắm',    icon: CATEGORY_STYLES['Mua sắm'].icon },
-  { label: 'Người thân', icon: CATEGORY_STYLES['Người thân'].icon },
-  { label: 'Hóa đơn',   icon: CATEGORY_STYLES['Hóa đơn'].icon },
-  { label: 'Nhà cửa',    icon: CATEGORY_STYLES['Nhà cửa'].icon },
-  { label: 'Giải trí',   icon: CATEGORY_STYLES['Giải trí'].icon },
-  { label: 'Làm đẹp',   icon: CATEGORY_STYLES['Làm đẹp'].icon },
-  { label: 'Sức khỏe',   icon: CATEGORY_STYLES['Sức khỏe'].icon },
-  { label: 'Học tập',   icon: CATEGORY_STYLES['Học tập'].icon },
-  { label: 'Di chuyển',  icon: CATEGORY_STYLES['Di chuyển'].icon },
-  { label: 'Đầu tư',    icon: CATEGORY_STYLES['Đầu tư'].icon },
-  { label: 'Khác',       icon: CATEGORY_STYLES['Khác'].icon },
+  { id: 'food', name: 'Ăn uống', label: 'Ăn uống', icon: 'food-fork-drink', color: '#FF6B6B' },
+  { id: 'shopping', name: 'Mua sắm', label: 'Mua sắm', icon: 'cart', color: '#FFD93D' },
+  { id: 'transport', name: 'Di chuyển', label: 'Di chuyển', icon: 'car', color: '#6BCB77' },
+  { id: 'friend', name: 'Người thân', label: 'Người thân', icon: 'account-group', color: '#4D96FF' },
+  { id: 'other', name: 'Khác', label: 'Khác', icon: 'dots-grid', color: '#9D9D9D' }
 ];
 
 export const DEFAULT_INCOME_CATEGORIES = [
-  { label: 'Lương',      icon: CATEGORY_STYLES['Lương'].icon },
-  { label: 'Kinh doanh', icon: CATEGORY_STYLES['Kinh doanh'].icon },
-  { label: 'Thưởng',     icon: CATEGORY_STYLES['Thưởng'].icon },
-  { label: 'Khác',       icon: CATEGORY_STYLES['Khác'].icon },
+  { id: 'salary', name: 'Lương', label: 'Lương', icon: 'cash', color: '#4CAF50' },
+  { id: 'business', name: 'Kinh doanh', label: 'Kinh doanh', icon: 'chart-line', color: '#2196F3' },
+  { id: 'bonus', name: 'Thưởng', label: 'Thưởng', icon: 'gift', color: '#FFC107' },
+  { id: 'other_income', name: 'Khác', label: 'Khác', icon: 'dots-grid', color: '#9D9D9D' },
 ];

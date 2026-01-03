@@ -15,7 +15,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useTheme } from '../theme/themeContext'; // ✅ Import useTheme
+import { useTheme } from '../theme/themeContext';
+import { useCategories } from '../hook/useCategories';
 import { 
   DEFAULT_EXPENSE_CATEGORIES, 
   DEFAULT_INCOME_CATEGORIES,
@@ -24,13 +25,14 @@ import {
 const { width } = Dimensions.get('window');
 
 const AddTransactionScreen = ({ navigation, route }: any) => {
-  const { colors, isDarkMode } = useTheme(); // ✅ Lấy colors
-  
+  const { categories } = useCategories();
+  const { colors, isDarkMode } = useTheme();
   const [transactionType, setTransactionType] = useState('expense');
   const [inputMode, setInputMode] = useState('manual');
   const [selectedCategory, setSelectedCategory] = useState(DEFAULT_EXPENSE_CATEGORIES[0].label);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [type, setType] = useState<'expense' | 'income'>('expense');
   const [transactionDate, setTransactionDate] = useState(new Date());
   const [recurrence, setRecurrence] = useState('Không lặp lại');
   const [wallet, setWallet] = useState('Ngoài MoMo');
@@ -47,20 +49,15 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
- 
-  const categoryColors: any = {
-    'Ăn uống': '#FF6B6B',
-    'Mua sắm': '#FFD93D',
-    'Di chuyển': '#6BCB77',
-    'Người thân': '#4D96FF',
-    'Khác': '#9D9D9D',
-    'Lương': '#4CAF50',
-    'Kinh doanh': '#2196F3',
-    'Thưởng': '#FFC107',
-  };
+  const filteredCategories = categories.filter(c => c.type === type);
 
-  const currentUser = auth().currentUser;
-  const TEST_USER_ID = 'my-test-user-id-123';
+ 
+  
+  const userId = auth().currentUser?.uid;
+
+  if (!userId) {
+    return <Text>Vui lòng đăng nhập</Text>; 
+  }
 
   const resetFields = () => {
     setAmount('');              
@@ -115,14 +112,27 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     const subscriber = firestore()
       .collection('user_categories')
-      .where('userId', '==', TEST_USER_ID)
+      .where('userId', '==', userId)
       .onSnapshot(querySnapshot => {
         const customExpense: any[] = [];
+        const customIncome: any[] = []; 
+
         querySnapshot.forEach(doc => {
-          customExpense.push({ id: doc.id, ...doc.data() });
+          const data = doc.data();
+          const item = { id: doc.id, ...data };
+
+          if (data.type === 'income') {
+            customIncome.push(item);
+          } else {
+            customExpense.push(item);
+          }
         });
+
+        // 3. Cập nhật cả 2 danh sách
         setExpenseCategoriesList([...DEFAULT_EXPENSE_CATEGORIES, ...customExpense]);
+        setIncomeCategoriesList([...DEFAULT_INCOME_CATEGORIES, ...customIncome]); 
       });
+      
     return () => subscriber();
   }, []);
 
@@ -201,7 +211,7 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
       icon: 'tag-outline',
       color: randomColor,
       type: transactionType,
-      userId: TEST_USER_ID,
+      userId: userId,
       createdAt: new Date().toISOString(),
     };
 
@@ -213,7 +223,7 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
         icon: 'tag-outline',
         color: randomColor,
         type: transactionType,
-        userId: TEST_USER_ID,
+        userId: userId,
         createdAt: new Date().toISOString(),
         id: docRef.id,
       };
@@ -247,7 +257,7 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
     setLoading(true);
     try {
       const transactionData = {
-        userId: TEST_USER_ID,
+        userId: userId,
         type: transactionType,
         amount: parseInt(amount),
         category: selectedCategory,
@@ -317,7 +327,6 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
     );
   };
 
-  // ✅ Component SelectModal với theme
   const SelectModal = ({ visible, onClose, title, options, onSelect, selectedValue }: any) => (
     <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
@@ -359,7 +368,6 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
     </Modal>
   );
 
-  // ✅ Component InputField với theme
   const InputField = ({ label, value, placeholder, onPress, iconName, isDropdown = false }: any) => {
     if (isDropdown) {
       return (
@@ -381,7 +389,6 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
     return null; 
   };
 
-  // ✅ Component ImageCard với theme
   const ImageCard = ({ title, statusIcon }: any) => {
     const isSuccess = statusIcon === 'check-circle';
     const iconColor = isSuccess ? '#5cb85c' : '#dc3545';
@@ -411,6 +418,8 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
     } else if (title === "Ảnh mờ") {
       content = <View style={{alignItems: 'center', marginVertical: 10}}><Icon name="blur" size={40} color="#5cb85c" /></View>;
     }
+
+    
 
     return (
       <TouchableOpacity style={[styles.imageCard, { backgroundColor: borderColor, borderColor: colors.border }]}>
@@ -465,31 +474,52 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
                 onPress={() => setSelectedCategory(cat.label)}
                 disabled={loading}
               >
-                <View style={[styles.categoryIconWrapper, { backgroundColor: categoryColors[cat.label] + '20' }]}>
-                  <Icon name={cat.icon} size={24} color={categoryColors[cat.label] || colors.text} style={{ marginBottom: 4 }} />
-                </View>
+               <View style={[styles.categoryIconWrapper, { backgroundColor: (cat.color || colors.primary) + '20' }]}>
+                <Icon name={cat.icon} size={24} color={cat.color || colors.text} style={{ marginBottom: 4 }} />
+              </View>
                 <Text style={[styles.categoryText, { color: colors.text }]}>{cat.label}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity 
-              style={[
-                styles.categoryButton,
-                { backgroundColor: colors.background, borderColor: colors.border },
-                selectedCategory && !categoriesToShow.slice(0, 3).find(c => c.label === selectedCategory) && {
-                  backgroundColor: colors.primary + '15',
-                  borderColor: colors.primary
-                }
-              ]}
-              onPress={() => setShowCategoryModal(true)}
-              disabled={loading}
-            >
-              <View style={[styles.categoryIconWrapper, { backgroundColor: '#9D9D9D20' }]}>
-                <Icon name="dots-grid" size={24} color="#9D9D9D" style={{ marginBottom: 4 }} />
-              </View>
-              <Text style={[styles.categoryText, { color: colors.text }]}>
-                {selectedCategory && !categoriesToShow.slice(0, 3).find(c => c.label === selectedCategory) ? selectedCategory : 'Khác'}
-              </Text>
-            </TouchableOpacity>
+            {(() => {
+                  const isSelectedInTop3 = categoriesToShow.slice(0, 3).some(c => c.label === selectedCategory);
+                  const showSelectedCustom = selectedCategory && !isSelectedInTop3;
+                  
+                  const currentCategoryObj = categoriesToShow.find(c => c.label === selectedCategory);
+
+                  const displayLabel = showSelectedCustom ? selectedCategory : 'Khác';
+                  const displayIcon = showSelectedCustom ? (currentCategoryObj?.icon || 'tag-outline') : 'dots-grid';
+                  const displayColor = showSelectedCustom ? (currentCategoryObj?.color || '#9D9D9D') : '#9D9D9D';
+                  
+                  return (
+                    <TouchableOpacity 
+                      style={[
+                        styles.categoryButton,
+                        { backgroundColor: colors.background, borderColor: colors.border },
+                        showSelectedCustom && {
+                          backgroundColor: displayColor + '15', 
+                          borderColor: displayColor
+                        }
+                      ]}
+                      onPress={() => setShowCategoryModal(true)}
+                      disabled={loading}
+                    >
+                      <View style={[styles.categoryIconWrapper, { backgroundColor: displayColor + '20' }]}>
+                        <Icon name={displayIcon} size={24} color={displayColor} style={{ marginBottom: 4 }} />
+                      </View>
+
+                      <Text 
+                        style={[
+                            styles.categoryText, 
+                            { color: colors.text },
+                            showSelectedCustom && { fontWeight: '700', color: displayColor }
+                        ]} 
+                        numberOfLines={1}
+                      >
+                        {displayLabel}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+              })()}
           </View>
         </View>
 
@@ -514,10 +544,18 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
                     ]}
                     onPress={() => { setSelectedCategory(item.label); setShowCategoryModal(false); }}
                   >
-                    <View style={styles.optionContent}>
-                      <View style={[styles.optionIconWrapper, { backgroundColor: categoryColors[item.label] + '20' }]}>
-                        <Icon name={item.icon} size={22} color={categoryColors[item.label] || colors.textSecondary} />
+                   <View style={styles.optionContent}>
+                      <View style={[
+                        styles.optionIconWrapper, 
+                        { backgroundColor: (item.color || colors.primary) + '20' } 
+                      ]}>
+                        <Icon 
+                          name={item.icon} 
+                          size={22} 
+                          color={item.color || colors.textSecondary} 
+                        />
                       </View>
+                      
                       <Text style={[
                         styles.optionText,
                         { color: colors.text },
@@ -537,55 +575,13 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
                       )}
                     </View>
                   </TouchableOpacity>
-                ))}
-                <TouchableOpacity 
-                  style={[styles.createNewButton, { borderTopColor: colors.border }]} 
-                  onPress={() => setShowCreateCategory(true)}
-                >
-                  <Icon name="plus" size={20} color={colors.primary} style={{ marginRight: 12 }} />
-                  <Text style={[styles.createNewText, { color: colors.primary }]}>Tạo danh mục mới</Text>
-                </TouchableOpacity>
+                ))}           
               </ScrollView>
             </View>
           </View>
         </Modal>
 
-        {/* MODAL TẠO DANH MỤC */}
-        <Modal visible={showCreateCategory} transparent={true} animationType="slide" onRequestClose={() => setShowCreateCategory(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { maxHeight: '50%', backgroundColor: colors.surface }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Tạo danh mục mới</Text>
-                <TouchableOpacity onPress={() => setShowCreateCategory(false)}>
-                  <Icon name="close" size={24} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.createCategoryContent}>
-                <Text style={[styles.createCategoryLabel, { color: colors.text }]}>Tên danh mục*</Text>
-                <TextInput
-                  style={[
-                    styles.createCategoryInput,
-                    { 
-                      borderColor: colors.border,
-                      color: colors.text,
-                      backgroundColor: colors.background
-                    }
-                  ]}
-                  placeholder="Nhập tên danh mục"
-                  value={newCategoryName}
-                  onChangeText={setNewCategoryName}
-                  placeholderTextColor={colors.textSecondary}
-                />
-                <TouchableOpacity 
-                  style={[styles.createCategoryButton, { backgroundColor: colors.primary }]} 
-                  onPress={handleCreateCategory}
-                >
-                  <Text style={styles.createCategoryButtonText}>Tạo danh mục</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+       
 
         <InputField 
           label="Ngày giao dịch" 
@@ -727,18 +723,12 @@ const AddTransactionScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? colors.surface : '#FFD6E8'}]}>
         <TouchableOpacity onPress={handleGoBack} style={styles.headerIcon}>
           <Icon name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Ghi chép giao dịch</Text>
         <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="bell-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon}>
-            <Icon name="home-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
         </View>
       </View>
 

@@ -17,8 +17,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../theme/themeContext';
+import auth from '@react-native-firebase/auth';
 
-// Kích hoạt animation
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -32,7 +32,6 @@ LocaleConfig.locales['vi'] = {
 };
 LocaleConfig.defaultLocale = 'vi';
 
-const TEST_USER_ID = 'my-test-user-id-123';
 
 const categoryIcons: any = {
   'Ăn uống': 'silverware-fork-knife', 'Mua sắm': 'cart-outline', 'Di chuyển': 'car',
@@ -55,12 +54,18 @@ const formatCurrency = (amount: number) => {
 
 const CalendarScreen = () => {
   const navigation = useNavigation<any>();
-  const { colors, isDarkMode } = useTheme(); // ✅ Lấy colors và isDarkMode
+  const { colors, isDarkMode } = useTheme(); 
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 10));
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [monthTransactions, setMonthTransactions] = useState<Transaction[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
+  const userId = auth().currentUser?.uid;
+
+if (!userId) {
+   return <Text>Vui lòng đăng nhập</Text>; 
+}
+
 
   const toggleExpand = () => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -71,7 +76,6 @@ const CalendarScreen = () => {
       navigation.navigate('AddTransactionModal'); 
   };
 
-  // === Tải dữ liệu ===
   useFocusEffect(
     React.useCallback(() => {
       setLoading(true);
@@ -83,7 +87,7 @@ const CalendarScreen = () => {
 
       const unsubscribe = firestore()
         .collection('transactions')
-        .where('userId', '==', TEST_USER_ID)
+        .where('userId', '==', userId)
         .where('date', '>=', startOfMonth)
         .where('date', '<=', endOfMonth)
         .onSnapshot(snapshot => {
@@ -102,7 +106,6 @@ const CalendarScreen = () => {
     }, [currentMonth])
   );
 
-  // === Tính toán ===
   const monthlyTotals = useMemo(() => {
     let totalIncome = 0; let totalExpense = 0;
     monthTransactions.forEach(t => {
@@ -144,7 +147,6 @@ const CalendarScreen = () => {
       .sort((a, b) => (a.type === 'income' ? -1 : 1));
   }, [monthTransactions, selectedDate]);
 
-  // ✅ Render Transaction Item - BỎ useTheme ở đây vì đã khai báo ở trên
   const renderTransactionItem = ({ item }: { item: Transaction }) => {
     const isIncome = item.type === 'income';
     const color = isIncome ? '#4CAF50' : '#FF6B6B';
@@ -169,7 +171,6 @@ const CalendarScreen = () => {
     );
   };
 
-  // ✅ Empty State Component
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
         <Icon name="package-variant-closed" size={80} color={colors.textSecondary} style={{marginBottom: 10}} />
@@ -193,7 +194,6 @@ const CalendarScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* 1. Tổng quan */}
       <View style={[styles.summaryContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.summaryItem}>
            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Tổng thu</Text>
@@ -211,7 +211,6 @@ const CalendarScreen = () => {
         </View>
       </View>
 
-      {/* 2. Lịch */}
       <View style={{ height: isExpanded ? 0 : 'auto', overflow: 'hidden', opacity: isExpanded ? 0 : 1 }}>
           <Calendar
             current={currentMonth}
@@ -241,7 +240,6 @@ const CalendarScreen = () => {
           />
       </View>
 
-      {/* 3. Chi tiết Giao dịch (Sheet) */}
       <View style={[
         styles.detailsContainer, 
         { backgroundColor: colors.surface }, 
@@ -283,21 +281,29 @@ const CalendarScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // Tổng quan
   summaryContainer: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     padding: 16, 
     borderBottomWidth: 1
   },
-  summaryItem: { alignItems: 'center', flex: 1 },
-  summaryLabel: { fontSize: 12, marginBottom: 4 },
-  summaryValue: { fontSize: 14, fontWeight: 'bold' },
+  summaryItem: { 
+    alignItems: 'center', 
+    flex: 1 
+  },
+  summaryLabel: { 
+    fontSize: 12, 
+    marginBottom: 4 
+  },
+  summaryValue: { 
+    fontSize: 14, 
+    fontWeight: 'bold' 
+  },
 
-  // Lịch
-  calendar: { borderBottomWidth: 1 },
+  calendar: { 
+    borderBottomWidth: 1 
+  },
 
-  // Sheet Chi tiết
   detailsContainer: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -305,17 +311,44 @@ const styles = StyleSheet.create({
     elevation: 4, 
     shadowColor: '#000', 
     shadowOpacity: 0.05, 
-    shadowOffset: { width: 0, height: -2 },
+    shadowOffset: { 
+      width: 0, 
+      height: -2 
+    },
   },
-  detailsCollapsed: { flex: 1, marginTop: -10, paddingTop: 5 },
-  detailsExpanded: { flex: 1, marginTop: 0, paddingTop: 5 },
-  expandButton: { alignItems: 'center', paddingVertical: 8, marginBottom: 5 },
-  detailsHeader: { flexDirection: 'column', marginBottom: 12 },
-  detailsTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-  dailyStats: { flexDirection: 'row', alignItems: 'center' },
-  dailyStatText: { fontSize: 13, fontWeight: '500' },
+  detailsCollapsed: { 
+    flex: 1, 
+    marginTop: -10, 
+    paddingTop: 5 
+  },
+  detailsExpanded: { 
+    flex: 1,
+    marginTop: 0, 
+    paddingTop: 5 
+  },
+  expandButton: { 
+    alignItems: 'center', 
+    paddingVertical: 8, 
+    marginBottom: 5 
+  },
+  detailsHeader: { 
+    flexDirection: 'column', 
+    marginBottom: 12 
+  },
+  detailsTitle: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    marginBottom: 4 
+  },
+  dailyStats: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  dailyStatText: { 
+    fontSize: 13, 
+    fontWeight: '500' 
+  },
 
-  // Item List
   itemContainer: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -332,12 +365,22 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     marginRight: 12 
   },
-  itemInfo: { flex: 1 },
-  itemNote: { fontSize: 15, fontWeight: '500' },
-  itemCategory: { fontSize: 12, marginTop: 2 },
-  itemAmount: { fontSize: 15, fontWeight: 'bold' },
+  itemInfo: { 
+    flex: 1 
+  },
+  itemNote: { 
+    fontSize: 15, 
+    fontWeight: '500' 
+  },
+  itemCategory: { 
+    fontSize: 12,  
+    marginTop: 2 
+  },
+  itemAmount: { 
+    fontSize: 15, 
+    fontWeight: 'bold'
+   },
 
-  // Empty State
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',

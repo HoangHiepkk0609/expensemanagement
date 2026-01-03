@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import firestore from '@react-native-firebase/firestore';
-
-const TEST_USER_ID = 'my-test-user-id-123';
+import auth from '@react-native-firebase/auth';
 
 export interface Transaction {
   id: string;
@@ -21,37 +20,39 @@ export const useTransactions = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const user = auth().currentUser;
+  const userId = user ? user.uid : null;
 
   useEffect(() => {
-    setLoading(true);
-    
-    // Subscribe to transactions collection
+    if (!userId) {
+      setTransactions([]);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = firestore()
       .collection('transactions')
-      .where('userId', '==', TEST_USER_ID)
+      .where('userId', '==', userId)
       .orderBy('date', 'desc')
       .onSnapshot(
         (snapshot) => {
-          const fetchedTransactions: Transaction[] = [];
-          
-          snapshot.forEach((doc) => {
-            fetchedTransactions.push({
+          const docs = snapshot.docs.map((doc : any) => {
+            const data = doc.data();
+            return {
               id: doc.id,
-              ...doc.data(),
-            } as Transaction);
+              ...data,
+
+              date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
+            };
           });
-          
-          setTransactions(fetchedTransactions);
+          setTransactions(docs);
           setLoading(false);
         },
-        (err) => {
-          console.error('Error fetching transactions:', err);
-          setError(err.message);
+        (error) => {
+          console.error('Lỗi lấy transaction:', error);
           setLoading(false);
         }
       );
-
-    // Cleanup subscription
     return () => unsubscribe();
   }, []);
 

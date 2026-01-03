@@ -35,12 +35,10 @@ const categoryColors: Record<string, string> = {
   'Khác': '#6B7280',
 };
 
-// Lấy màu cho danh mục
 export const getCategoryColor = (category: string): string => {
   return categoryColors[category] || '#6B7280';
 };
 
-// Lấy danh sách các tuần gần đây
 export const getRecentWeeks = (count: number = 4): WeekPeriod[] => {
   const weeks: WeekPeriod[] = [];
   const today = new Date();
@@ -60,7 +58,6 @@ export const getRecentWeeks = (count: number = 4): WeekPeriod[] => {
   return weeks;
 };
 
-// Lọc giao dịch trong khoảng thời gian
 export const filterTransactionsByPeriod = (
   transactions: Transaction[],
   startDate: Date,
@@ -72,7 +69,6 @@ export const filterTransactionsByPeriod = (
   });
 };
 
-// Tính tổng theo loại
 export const calculateTotal = (
   transactions: Transaction[],
   type: 'expense' | 'income'
@@ -82,7 +78,6 @@ export const calculateTotal = (
     .reduce((sum, t) => sum + t.amount, 0);
 };
 
-// Nhóm theo danh mục và tính phần trăm
 export const calculateCategoryBreakdown = (
   transactions: Transaction[]
 ): CategoryData[] => {
@@ -93,15 +88,13 @@ export const calculateCategoryBreakdown = (
     return [];
   }
   
-  // Nhóm theo category
   const categoryMap: Record<string, number> = {};
   
   expenseTransactions.forEach((transaction) => {
     const category = transaction.category || 'Khác';
     categoryMap[category] = (categoryMap[category] || 0) + transaction.amount;
   });
-  
-  // Chuyển thành mảng và tính phần trăm
+
   const categories: CategoryData[] = Object.entries(categoryMap)
     .map(([name, amount]) => ({
       name,
@@ -109,12 +102,11 @@ export const calculateCategoryBreakdown = (
       percent: Math.round((amount / totalExpense) * 100),
       color: getCategoryColor(name),
     }))
-    .sort((a, b) => b.amount - a.amount); // Sắp xếp giảm dần
+    .sort((a, b) => b.amount - a.amount); 
   
   return categories;
 };
 
-// Tính báo cáo cho một kỳ
 export const calculateReport = (
   transactions: Transaction[],
   startDate: Date,
@@ -129,7 +121,6 @@ export const calculateReport = (
   const balance = totalIncome - totalExpense;
   const categories = calculateCategoryBreakdown(periodTransactions);
   
-  // So sánh với kỳ trước (nếu có)
   let trend = 'stable';
   let comparison = '0%';
   

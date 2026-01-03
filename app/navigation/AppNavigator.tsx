@@ -16,7 +16,6 @@ import CategoryManagementScreen from '../screens/CategoryManagementScreen';
 import ImageExtractScreen from '../screens/ImageExtractScreen';
 import InvoiceScanner from '../screens/InvoiceScanner';
 
-// --- CẬP NHẬT TYPE LIST ---
 export type RootStackParamList = {
   MainTabs: undefined;
   CategoryDetail: undefined;
@@ -45,22 +44,18 @@ export type RootStackParamList = {
   CategoryManagementScreen: undefined;
 };
 
-// Tạo Root Stack
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
-// Component Navigator chính
 export default function AppNavigator() {
   return (
       <RootStack.Navigator>
         
-        {/* Màn hình chính */}
         <RootStack.Screen
           name="MainTabs"
           component={MainTabs}
           options={{ headerShown: false }}
         />
 
-        {/* Các màn hình phụ */}
         <RootStack.Screen
           name="CategoryDetail"
           component={CategoryDetailScreen}
@@ -88,7 +83,6 @@ export default function AppNavigator() {
           }}
         />
 
-        {/* ✅ MÀN HÌNH NHẬP BẰNG ẢNH - OCR NHIỀU ẢNH */}
         <RootStack.Screen
           name="ImageExtract"
           component={ImageExtractScreen}
@@ -98,7 +92,6 @@ export default function AppNavigator() {
           }}
         />
 
-        {/* ✅ MÀN HÌNH QUÉT HÓA ĐƠN - OCR 1 ẢNH */}
         <RootStack.Screen
           name="InvoiceScanner"
           component={InvoiceScanner}

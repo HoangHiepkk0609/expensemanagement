@@ -27,7 +27,6 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* Menu Options */}
         <View style={styles.menuContainer}>
           <TouchableOpacity style={styles.menuItem}>
             <Icon name="plus" size={30} color="#4CD080" />
@@ -47,7 +46,6 @@ const HomeScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Expense Overview */}
         <View style={styles.expenseContainer}>
           <View style={styles.expenseHeader}>
             <Text style={styles.expenseTitle}>Tình hình thu chi</Text>
@@ -81,7 +79,6 @@ const HomeScreen = () => {
             </View>
           </View>
 
-          {/* Donut Chart Section */}
           <View style={styles.chartContainer}>
             <DonutChart percentage={100} />
             <Text style={styles.chartLabel}>Giải trí</Text>

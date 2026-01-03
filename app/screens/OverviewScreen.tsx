@@ -19,14 +19,16 @@ import { PieChart } from "react-native-gifted-charts";
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useTransactions } from '../hook/useTransactions';
 import { useTheme } from '../theme/themeContext';
+import auth from '@react-native-firebase/auth';
+import { useCategories } from '../hook/useCategories'; 
+import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '../constants/categories';
 
-// Kích hoạt LayoutAnimation cho Android
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const { width } = Dimensions.get('window');
-const TEST_USER_ID = 'my-test-user-id-123';
 
 interface Transaction {
   id: string;
@@ -47,27 +49,18 @@ const OverviewScreen = ({ navigation }: any) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [chartScale] = useState(new Animated.Value(0));
   const [categoryListOpacity] = useState(new Animated.Value(0));
+  const user = auth().currentUser;
+  const userId = user ? user.uid : null;
+  if (!userId) {
+    return <Text>Vui lòng đăng nhập</Text>;
+  } 
 
-  // ✅ STATE MỚI: Lưu vị trí miếng bánh đang chọn (-1 là chưa chọn gì)
+
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const { colors, isDarkMode } = useTheme();
 
-  // Icon cho từng danh mục
-  const categoryIcons: any = {
-    'Ăn uống': 'silverware-fork-knife',
-    'Mua sắm': 'cart-outline',
-    'Di chuyển': 'car',
-    'Người thân': 'human-handsup',
-    'Khác': 'dots-grid',
-  };
 
-  const categoryColors: any = {
-    'Ăn uống': '#FF6B6B',
-    'Mua sắm': '#FFD93D',
-    'Di chuyển': '#6BCB77',
-    'Người thân': '#4D96FF',
-    'Khác': '#9D9D9D',
-  };
+  const { categories: customCategories } = useCategories();
 
   const incomeCategoryIcons: any = {
     'Lương': 'cash-marker',
@@ -94,7 +87,7 @@ const OverviewScreen = ({ navigation }: any) => {
 
       const unsubscribe = firestore()
         .collection('transactions')
-        .where('userId', '==', TEST_USER_ID)
+        .where('userId', '==', userId)
         .orderBy('date', 'desc')
         .onSnapshot(
           (snapshot) => {
@@ -167,28 +160,46 @@ const OverviewScreen = ({ navigation }: any) => {
     return categoryTotals;
   };
 
+  const getCategoryStyle = (categoryName: string, currentViewMode: 'expense' | 'income') => {
+  
+    const custom = customCategories.find(
+      c => c.label === categoryName && c.type === currentViewMode
+    );
+    if (custom) return { icon: custom.icon, color: custom.color };
+
+  
+    const defaultList = currentViewMode === 'expense' ? DEFAULT_EXPENSE_CATEGORIES : DEFAULT_INCOME_CATEGORIES;
+    const def = defaultList.find(c => c.label === categoryName);
+    
+  
+    if (def) return { icon: def.icon, color: def.color || '#9D9D9D' };
+
+  
+    return { icon: 'dots-grid', color: '#9D9D9D' };
+  };
+
   const getPieChartData = () => {
     const categoryTotals = getCategoryTotals();
     const total = (viewMode === 'expense') ? getTotalExpense() : getTotalIncome();
-    const colorsToUse = (viewMode === 'expense') ? categoryColors : incomeCategoryColors;
 
     return Object.keys(categoryTotals).map((category, index) => {
       const amount = categoryTotals[category];
       const percentage = (total > 0) ? ((amount / total) * 100).toFixed(0) : '0';
       
-      // Kiểm tra xem item này có đang được chọn không
       const isFocused = index === selectedIndex;
+      
+ 
+      const { color } = getCategoryStyle(category, viewMode);
 
       return {
         value: amount,
-        color: colorsToUse[category] || '#9D9D9D',
+        color: color, 
         text: `${percentage}%`,
         categoryName: category,
         percentage: percentage,
-        // ✅ Cấu hình riêng cho item khi được focus
-       focused: isFocused, 
-       shiftTextX: isFocused ? 10 : 0, 
-       radius: isFocused ? 80 : 70,
+        focused: isFocused, 
+        shiftTextX: isFocused ? 10 : 0, 
+        radius: isFocused ? 80 : 70,
       };
     });
   };
@@ -205,7 +216,7 @@ const OverviewScreen = ({ navigation }: any) => {
       newMonth.setMonth(newMonth.getMonth() + 1);
     }
     setCurrentMonth(newMonth);
-    setSelectedIndex(-1); // Reset selection khi đổi tháng
+    setSelectedIndex(-1); 
   };
 
   const formatMonth = () => {
@@ -228,7 +239,7 @@ const OverviewScreen = ({ navigation }: any) => {
   };
 
   useEffect(() => {
-    setSelectedIndex(-1); // Reset khi đổi chế độ view
+    setSelectedIndex(-1); 
     Animated.timing(chartScale, {
       toValue: 1,
       duration: 800,
@@ -244,8 +255,7 @@ const OverviewScreen = ({ navigation }: any) => {
     }).start();
   }, [viewMode]);
 
-  // ✅ HÀM RENDER LEGEND (CHÚ THÍCH) ĐÃ NÂNG CẤP
-  // Nhận vào sự kiện onLegendPress để bấm vào chữ cũng focus vào biểu đồ
+ 
   const renderLegend = (data: any[], onLegendPress: (index: number) => void) => {
     return (
       <View style={styles.legendContainer}>
@@ -259,26 +269,25 @@ const OverviewScreen = ({ navigation }: any) => {
                 onPress={() => onLegendPress(index)}
                 style={[
                     styles.legendItem,
-                    // ✅ NẾU DARK MODE: Nền đen (surface)
-                    // ✅ NẾU LIGHT MODE: Nền trắng nếu được chọn, ngược lại trong suốt
+                
                     { 
                         backgroundColor: isDarkMode 
                             ? (isSelected ? colors.surface : 'transparent') 
                             : (isSelected ? '#fff' : 'transparent'),
-                        // Thêm viền nhẹ ở Dark Mode cho nổi
+                  
                         borderColor: isDarkMode && isSelected ? colors.border : 'transparent',
                         borderWidth: isDarkMode && isSelected ? 1 : 0,
                     },
-                    // Shadow chỉ dùng cho Light Mode
+                 
                     !isDarkMode && isSelected && styles.legendItemSelected
                 ]}
             >
               <View style={[ styles.legendColor, { backgroundColor: item.color } ]} />
               <View>
-                  {/* ✅ SỬA MÀU CHỮ: Dùng colors.text */}
+          
                   <Text style={[
                     styles.legendText,
-                    { color: colors.text }, // Chữ trắng/đen tùy theme
+                    { color: colors.text },
                     isSelected && styles.legendTextSelected
                   ]}>
                       {formatCurrency(item.value).replace('₫','')} 
@@ -298,11 +307,11 @@ const OverviewScreen = ({ navigation }: any) => {
       </View>
     );
   };
-  // ✅ Hàm xử lý khi bấm vào (cả Chart và Legend đều gọi cái này)
+
   const handlePressItem = (index: number) => {
-    // Kích hoạt animation mượt mà
+
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    // Nếu bấm lại cái đang chọn thì bỏ chọn, ngược lại thì chọn cái mới
+ 
     setSelectedIndex(prev => prev === index ? -1 : index);
   };
 
@@ -328,11 +337,11 @@ const OverviewScreen = ({ navigation }: any) => {
     opacity: categoryListOpacity,
   };
 
-  // --- LOGIC TÍNH TOÁN XU HƯỚNG ---
+ 
   const calculateTrend = () => {
     const now = new Date();
-    const currentMonth = now.getMonth();     // Tháng này (0-11)
-    const currentYear = now.getFullYear();   // Năm nay
+    const currentMonth = now.getMonth();   
+    const currentYear = now.getFullYear();  
 
     // Tính tháng trước
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -343,15 +352,15 @@ const OverviewScreen = ({ navigation }: any) => {
     let lastMonthExpense = 0;
 
     transactions.forEach(t => {
-      const tDate = new Date(t.date); // Đảm bảo t.date chuẩn định dạng
+      const tDate = new Date(t.date); 
       
-      // Chỉ tính khoản CHI (expense)
+  
       if (t.type === 'expense') {
-        // Cộng tổng tháng này
+       
         if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
           thisMonthExpense += t.amount;
         }
-        // Cộng tổng tháng trước
+   
         if (tDate.getMonth() === lastMonth && tDate.getFullYear() === lastMonthYear) {
           lastMonthExpense += t.amount;
         }
@@ -370,7 +379,7 @@ const OverviewScreen = ({ navigation }: any) => {
 
   return (
     <View style={[styles.container, {backgroundColor: colors.background}]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: isDarkMode ? colors.border : '#EEE' }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? colors.surface : '#FFD6E8' }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Quản lý chi tiêu</Text>
       </View>
 
@@ -402,25 +411,25 @@ const OverviewScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </View>
 
-          {/* ... Bên trong return ... */}
+      
 
           <View style={styles.totalsContainer}>
             
-            {/* 1. HỘP CHI TIÊU */}
+      
             <TouchableOpacity
               style={[
                 styles.totalBox,
                 {
-                  // ✅ LOGIC MỚI: Kiểm tra xem có đang chọn 'expense' không?
+                 
                   backgroundColor: isDarkMode 
                       ? colors.surface 
                       : (viewMode === 'expense' ? '#FFF0F5' : '#F9F9F9'),
                   
-                  // Chỉ hiện viền Hồng nếu đang chọn 'expense'
+              
                   borderColor: viewMode === 'expense' ? '#FF69B4' : 'transparent',
-                  borderWidth: viewMode === 'expense' ? 1.5 : 0, // Viền dày hơn chút cho rõ
+                  borderWidth: viewMode === 'expense' ? 1.5 : 0, 
                   
-                  // Làm mờ đi nếu không chọn
+           
                   opacity: viewMode === 'expense' ? 1 : 0.5, 
                 }
               ]}
@@ -437,21 +446,20 @@ const OverviewScreen = ({ navigation }: any) => {
               </Text>
             </TouchableOpacity>
 
-            {/* 2. HỘP THU NHẬP */}
             <TouchableOpacity
               style={[
                 styles.totalBox,
                 {
-                  // ✅ LOGIC MỚI: Kiểm tra xem có đang chọn 'income' không?
+            
                   backgroundColor: isDarkMode 
                       ? colors.surface 
                       : (viewMode === 'income' ? '#F0FFF4' : '#F9F9F9'),
 
-                  // Chỉ hiện viền Xanh nếu đang chọn 'income'
+                
                   borderColor: viewMode === 'income' ? '#4CAF50' : 'transparent',
                   borderWidth: viewMode === 'income' ? 1.5 : 0,
                   
-                  // Làm mờ đi nếu không chọn
+               
                   marginLeft: 12,
                   opacity: viewMode === 'income' ? 1 : 0.5,
                 }
@@ -533,18 +541,16 @@ const OverviewScreen = ({ navigation }: any) => {
             </View>
           )}
 
-          {Object.keys(groupedTransactions).map((category, index) => {
-            const iconsToUse = (viewMode === 'expense') ? categoryIcons : incomeCategoryIcons;
-            const colorsToUse = (viewMode === 'expense') ? categoryColors : incomeCategoryColors;
-            const totalToUse = (viewMode === 'expense') ? totalExpense : totalIncome;
+      {Object.keys(groupedTransactions).map((category, index) => {
+            // SỬA: Gọi hàm helper để lấy style cho category hiện tại
+            const { icon, color } = getCategoryStyle(category, viewMode);
 
+            const totalToUse = (viewMode === 'expense') ? totalExpense : totalIncome;
             const categoryTransactions = groupedTransactions[category];
             const categoryTotal = categoryTransactions.reduce(
-              (sum: number, t: Transaction) => sum + t.amount,
-              0
+              (sum: number, t: Transaction) => sum + t.amount, 0
             );
             const percentage = (totalToUse > 0) ? ((categoryTotal / totalToUse) * 100).toFixed(0) : '0';
-
             const isHighlighted = selectedIndex !== -1 && pieChartData[selectedIndex]?.categoryName === category;
 
             return (
@@ -552,14 +558,7 @@ const OverviewScreen = ({ navigation }: any) => {
                 key={category}
                 style={{
                   opacity: categoryListOpacity,
-                  transform: [
-                    {
-                      translateY: categoryListOpacity.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [20 * (index + 1), 0],
-                      }),
-                    },
-                  ],
+                  transform: [{ translateY: categoryListOpacity.interpolate({ inputRange: [0, 1], outputRange: [20 * (index + 1), 0] }) }],
                 }}
               >
                 <TouchableOpacity 
@@ -568,29 +567,28 @@ const OverviewScreen = ({ navigation }: any) => {
                       { borderBottomColor: colors.border || '#F5F5F5' },
                       isHighlighted && { backgroundColor: isDarkMode ? colors.surface : '#FFF0F5' }
                   ]}
-                  onPress={() =>
-                      navigation.navigate('CategoryDetail', {
-                      category,
-                      transactions: groupedTransactions[category],
-                      })
-                  }
+                  onPress={() => navigation.navigate('CategoryDetail', { category, transactions: groupedTransactions[category] })}
                   >
-                  <View style={[styles.categoryIcon, { backgroundColor: colorsToUse[category] + '20' }]}
-                  >
+                  
+                 
+                  <View style={[styles.categoryIcon, { backgroundColor: color + '20' }]}>
                     <Icon
-                      name={iconsToUse[category] || 'dots-grid'}
+                      name={icon}
                       size={24}
-                      color={colorsToUse[category] || '#9D9D9D'}
+                      color={color}
                     />
                   </View>
+                  
                   <View style={styles.categoryInfo}>
                     <Text style={[
                         styles.categoryName,
                         { color: colors.text },
                         isHighlighted && { fontWeight: 'bold', color: '#FF69B4' }
                     ]}>{category}</Text>
-                    <Text style={[styles.categoryPercentage, { color: colorsToUse[category] }]}>{percentage}%</Text>
+              
+                    <Text style={[styles.categoryPercentage, { color: color }]}>{percentage}%</Text>
                   </View>
+                  
                   <View style={styles.categoryAmount}>
                     <Text style={[
                         styles.categoryTotal,
@@ -794,7 +792,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    transform: [{ scale: 1.05 }], // Nổi lên một chút
+    transform: [{ scale: 1.05 }], 
   },
   legendColor: {
     width: 10,
@@ -885,23 +883,23 @@ const styles = StyleSheet.create({
   trendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF5E6', // Màu nền cam nhạt
+    backgroundColor: '#FFF5E6', 
     padding: 12,
     borderRadius: 12,
     marginTop: 16,
-    marginHorizontal: 16, // Cách lề 2 bên
+    marginHorizontal: 16, 
   },
   trendIconBox: {
     marginRight: 10,
   },
   trendText: {
-    flex: 1, // Để text chiếm hết khoảng trống giữa 2 icon
+    flex: 1, 
     fontSize: 14,
     color: '#555',
     lineHeight: 20,
   },
   trendHighlight: {
-    color: '#FF6B6B', // Màu đỏ hồng cho số tiền
+    color: '#FF6B6B',
     fontWeight: 'bold',
   },
 });

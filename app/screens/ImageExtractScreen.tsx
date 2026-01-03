@@ -18,6 +18,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import RNFS from 'react-native-fs';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import auth from '@react-native-firebase/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -51,7 +52,10 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
   const [showForm, setShowForm] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
-  const TEST_USER_ID = 'my-test-user-id-123';
+  const userId = auth().currentUser?.uid;
+  if (!userId) {
+    return <Text>Vui lòng đăng nhập</Text>;
+  } 
   
   const GEMINI_API_KEY = "AIzaSyCpfAXfGmAvEosiOu5693ZH73NQDVZOGww";
 
@@ -67,7 +71,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   }, [route?.params?.autoSelect]);
 
-  // ✅ Tự động chọn ảnh và OCR
   const handleAutoSelectAndOCR = async () => {
     try {
       const result = await launchImageLibrary({
@@ -98,7 +101,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         setShowForm(true);
         setIsProcessing(false);
 
-        // Hiển thị thông báo nếu OCR thất bại
         if (!success) {
           Alert.alert(
             'Thông báo',
@@ -117,11 +119,9 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ✅ Validate dữ liệu từ Gemini
   const validateOCRResponse = (data: any): boolean => {
     if (!data || typeof data !== 'object') return false;
-    
-    // Kiểm tra có ít nhất 1 trường hợp lệ
+
     const hasTotal = data.total && !isNaN(parseFloat(data.total));
     const hasStore = data.store_name && data.store_name.trim().length > 0;
     const hasDate = data.date && !isNaN(Date.parse(data.date));
@@ -129,21 +129,17 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     return hasTotal || hasStore || hasDate;
   };
 
-  // ✅ Parse số tiền linh hoạt hơn
   const parseAmount = (amountStr: string): string => {
     if (!amountStr) return '';
-    
-    // Loại bỏ tất cả ký tự không phải số
+
     const numericValue = amountStr.toString().replace(/[^0-9]/g, '');
     
-    // Chuyển thành số và validate
     const parsed = parseInt(numericValue);
     if (isNaN(parsed) || parsed <= 0) return '';
     
     return parsed.toString();
   };
 
-  // ✅ Parse ngày linh hoạt hơn
   const parseDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
     
@@ -151,7 +147,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
       const parsed = new Date(dateStr);
       if (isNaN(parsed.getTime())) return null;
       
-      // Không cho phép ngày tương lai
       if (parsed > new Date()) return null;
       
       return parsed;
@@ -160,18 +155,14 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ✅ Thực hiện OCR với Gemini AI
   const performOCR = async (imageUri: string, imageType: string): Promise<boolean> => {
     try {
       console.log("🔍 Đang gọi Gemini AI...");
       
-      // 1. Đọc file ảnh thành Base64
       const base64Data = await RNFS.readFile(imageUri, 'base64');
 
-      // 2. Khởi tạo Gemini - Thử nhiều model
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      
-      // Danh sách model để thử (từ mới nhất đến cũ nhất)
+
       const modelsToTry = [
       
         "gemini-2.0-flash"
@@ -180,13 +171,11 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
       let model;
       let lastError;
 
-      // Thử từng model cho đến khi thành công
       for (const modelName of modelsToTry) {
         try {
           console.log(`Đang thử model: ${modelName}`);
           model = genAI.getGenerativeModel({ model: modelName });
-          
-          // Test xem model có hoạt động không
+
           const testResult = await model.generateContent(["test"]);
           await testResult.response;
           
@@ -203,7 +192,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         throw new Error(`Không thể kết nối với bất kỳ model Gemini nào. Lỗi cuối: ${lastError?.message}`);
       }
 
-      // 3. Tạo Prompt chi tiết hơn
       const prompt = `Bạn là trợ lý trích xuất thông tin hóa đơn. Phân tích ảnh này và trả về JSON:
 
       {
@@ -227,14 +215,12 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         },
       };
 
-      // 4. Gửi yêu cầu đến Gemini
       const result = await model.generateContent([prompt, imagePart]);
       const response = await result.response;
       const text = response.text();
       
       console.log("📄 Gemini trả về:", text);
 
-      // 5. Parse JSON an toàn
       const cleanText = text
         .replace(/```json/g, '')
         .replace(/```/g, '')
@@ -242,14 +228,12 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
       
       const parsedData = JSON.parse(cleanText);
 
-      // 6. Validate dữ liệu
       if (!validateOCRResponse(parsedData)) {
         console.warn("⚠️ OCR response không hợp lệ");
         setOcrError("Không thể đọc thông tin từ hóa đơn");
         return false;
       }
 
-      // 7. Điền dữ liệu vào form
       let hasData = false;
 
       if (parsedData.total) {
@@ -279,7 +263,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     } catch (error: any) {
       console.error('❌ Lỗi Gemini:', error);
       
-      // Xử lý các loại lỗi khác nhau
       let errorMessage = 'Không thể xử lý ảnh';
       
       if (error.message?.includes('API key')) {
@@ -295,7 +278,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ✅ Chọn ảnh thủ công
   const handleSelectImages = async () => {
     try {
       const result = await launchImageLibrary({
@@ -316,7 +298,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         setShowForm(true);
         setOcrError(null);
         
-        // OCR từ ảnh đầu tiên
         if (result.assets[0].uri) {
           setLoading(true);
           const success = await performOCR(
@@ -340,7 +321,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ✅ Xóa ảnh
   const handleRemoveImage = (index: number) => {
     const newImages = selectedImages.filter((_, i) => i !== index);
     setSelectedImages(newImages);
@@ -353,7 +333,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ✅ Format số tiền
   const formatAmount = (text: string) => {
     const numericValue = text.replace(/[^0-9]/g, '');
     if (!numericValue) return '';
@@ -365,7 +344,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     setAmount(numericValue);
   };
 
-  // ✅ Xử lý thay đổi ngày
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
@@ -373,7 +351,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ✅ Lưu giao dịch
   const handleSaveTransaction = async () => {
     // Validate
     if (!amount || parseInt(amount) <= 0) {
@@ -390,7 +367,7 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
 
     try {
       const newTransactionData = {
-        userId: TEST_USER_ID,
+        userId: userId,
         type: transactionType,
         amount: parseInt(amount),
         category: selectedCategory,
@@ -413,7 +390,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
 
       setLoading(false);
 
-      // Navigate về overview với ngày của giao dịch
       navigation.navigate('MainTabs', {
         screen: 'Tổng quan',
         params: {
@@ -421,7 +397,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         },
       });
 
-      // Navigate đến chi tiết giao dịch
       navigation.replace('TransactionDetail', {
         transaction: finalTransactionObject,
       });
@@ -433,7 +408,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // ✅ Màn hình loading khi đang xử lý OCR
   if (isProcessing) {
     return (
       <View style={styles.loadingScreen}>
@@ -455,7 +429,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     );
   }
 
-  // ✅ Màn hình chọn ảnh
   if (!showForm && selectedImages.length === 0) {
     return (
       <View style={styles.container}>
@@ -500,10 +473,8 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
     );
   }
 
-  // ✅ Màn hình form chính
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color="#333" />
@@ -520,7 +491,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Tab Chi tiêu / Thu nhập */}
         <View style={styles.tabSwitcherContainer}>
           <View style={styles.tabSwitcher}>
             <TouchableOpacity
@@ -571,9 +541,7 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
           </View>
         </View>
 
-        {/* Form Section */}
         <View style={styles.formSection}>
-          {/* Hình ảnh */}
           <View style={styles.imagesSection}>
             <View style={styles.imageSectionHeader}>
               <Text style={styles.sectionLabel}>
@@ -613,7 +581,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
-          {/* Loading */}
           {loading && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#FF69B4" />
@@ -621,7 +588,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
             </View>
           )}
 
-          {/* OCR Error */}
           {ocrError && (
             <View style={styles.errorContainer}>
               <Icon name="alert-circle-outline" size={22} color="#FF9800" />
@@ -629,7 +595,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
             </View>
           )}
 
-          {/* Số tiền */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Số tiền<Text style={styles.required}>*</Text></Text>
             <View style={styles.amountInputWrapper}>
@@ -645,7 +610,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
-          {/* Danh mục */}
           <View style={styles.categoryGroup}>
             <Text style={styles.inputLabel}>Danh mục<Text style={styles.required}>*</Text></Text>
             <View style={styles.categoryContainer}>
@@ -687,7 +651,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
-          {/* Ngày giao dịch */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Ngày giao dịch<Text style={styles.required}>*</Text></Text>
             <TouchableOpacity
@@ -711,7 +674,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
             />
           )}
 
-          {/* Nguồn tiền */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Nguồn tiền<Text style={styles.required}>*</Text></Text>
             <View style={styles.inputContainer}>
@@ -720,7 +682,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
-          {/* Ghi chú */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Ghi chú</Text>
             <TextInput
@@ -736,7 +697,6 @@ const ImageExtractScreen = ({ navigation, route }: any) => {
         </View>
       </ScrollView>
 
-      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[

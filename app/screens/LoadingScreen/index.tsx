@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, ActivityIndicator, StyleSheet, SafeAreaView } from 'react-native';
-import { COLORS } from '../../theme/Colors'; // Import màu của bạn
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { COLORS } from '../../theme/Colors'; 
 
 const LoadingScreen = () => {
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ActivityIndicator size="large" color={COLORS.primary} />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -15,7 +15,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff', // Hoặc màu nền bạn muốn
+    backgroundColor: '#fff', 
   },
 });
 

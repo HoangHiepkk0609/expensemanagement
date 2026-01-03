@@ -16,31 +16,30 @@ import {
   WeekPeriod,
   ReportData,
 } from '../utils/reportUtils';
+import { useTheme } from '../theme/themeContext';
 
 const { width } = Dimensions.get('window');
 
 export default function PeriodicExpenseReport() {
+
   const { transactions, loading } = useTransactions();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   
-  // Lấy danh sách các tuần gần đây
   const [weeks, setWeeks] = useState<WeekPeriod[]>([]);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
   const [reports, setReports] = useState<Record<number, ReportData>>({});
+  const { colors, isDarkMode } = useTheme(); 
 
-  // Khởi tạo danh sách tuần
   useEffect(() => {
     const recentWeeks = getRecentWeeks(4);
     setWeeks(recentWeeks);
   }, []);
 
-  // Tính toán báo cáo khi có transactions hoặc weeks thay đổi
   useEffect(() => {
     if (transactions.length > 0 && weeks.length > 0) {
       const calculatedReports: Record<number, ReportData> = {};
       
       weeks.forEach((week, index) => {
-        // Lấy tuần trước để so sánh
         const previousWeek = weeks[index + 1];
         
         calculatedReports[index] = calculateReport(
@@ -63,12 +62,13 @@ export default function PeriodicExpenseReport() {
     }).format(amount);
   };
 
-  // Hiển thị loading
   if (loading || weeks.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#EC4899" />
-        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          Đang tải dữ liệu...
+        </Text>
       </View>
     );
   }
@@ -84,17 +84,17 @@ export default function PeriodicExpenseReport() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Báo cáo chi tiêu định kỳ</Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              Báo cáo chi tiêu định kỳ
+            </Text>
           </View>
 
-          {/* Period Selection */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Chọn kỳ báo cáo</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Chọn kỳ báo cáo</Text>
             <View style={styles.periodGrid}>
               {weeks.slice(0, 2).map((week, index) => (
                 <TouchableOpacity
@@ -102,33 +102,45 @@ export default function PeriodicExpenseReport() {
                   onPress={() => setSelectedWeekIndex(index)}
                   style={[
                     styles.periodButton,
-                    selectedWeekIndex === index && styles.periodButtonActive
+                    { 
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface
+                    },
+                    selectedWeekIndex === index && {
+                      borderColor: colors.primary,
+                      backgroundColor: colors.primary + '15'
+                    }
                   ]}
                 >
-                  <Text style={styles.periodLabel}>Tuần:</Text>
-                  <Text style={styles.periodDate}>{week.label}</Text>
+                  <Text style={[styles.periodLabel, { color: colors.textSecondary }]}>
+                    Tuần:
+                  </Text>
+                  <Text style={[styles.periodDate, { color: colors.text }]}>
+                    {week.label}
+                  </Text>
                   {selectedWeekIndex === index && (
-                    <View style={styles.activeDot} />
+                    <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
                   )}
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Notification Toggle */}
-            <View style={styles.notificationContainer}>
-              <Text style={styles.notificationText}>
+            <View style={[
+              styles.notificationContainer,
+              { backgroundColor: isDarkMode ? colors.background : '#F9FAFB' }
+            ]}>
+              <Text style={[styles.notificationText, { color: colors.text }]}>
                 Nhận thông báo khi có báo cáo chi tiêu
               </Text>
               <Switch
                 value={notificationsEnabled}
                 onValueChange={setNotificationsEnabled}
-                trackColor={{ false: '#D1D5DB', true: '#10B981' }}
+                trackColor={{ false: colors.border, true: '#10B981' }}
                 thumbColor="#FFFFFF"
               />
             </View>
           </View>
 
-          {/* Summary Cards */}
           <View style={styles.summaryGrid}>
             <View style={[styles.summaryCard, styles.expenseCard]}>
               <Text style={styles.summaryLabel}>Chi tiêu</Text>
@@ -163,13 +175,14 @@ export default function PeriodicExpenseReport() {
             </View>
           </View>
 
-          {/* Category Breakdown */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Chi tiết theo danh mục</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              Chi tiết theo danh mục
+            </Text>
 
             {currentReport.categories.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                   Chưa có giao dịch nào trong tuần này
                 </Text>
               </View>
@@ -178,29 +191,43 @@ export default function PeriodicExpenseReport() {
                 {currentReport.categories.map((category, index) => (
                   <View key={index} style={styles.categoryItem}>
                     <View style={styles.categoryHeader}>
-                      <Text style={styles.categoryName}>{category.name}</Text>
-                      <Text style={styles.categoryAmount}>
+                      <Text style={[styles.categoryName, { color: colors.text }]}>
+                        {category.name}
+                      </Text>
+                      <Text style={[styles.categoryAmount, { color: colors.textSecondary }]}>
                         {formatCurrency(category.amount)}
                       </Text>
                     </View>
                     <View style={styles.progressContainer}>
-                      <View style={styles.progressBar}>
+                      <View style={[
+                        styles.progressBar,
+                        { backgroundColor: isDarkMode ? colors.border : '#E5E7EB' }
+                      ]}>
                         <View
                           style={[
                             styles.progressFill,
-                            { width: `${category.percent}%`, backgroundColor: category.color }
+                            { 
+                              width: `${category.percent}%`, 
+                              backgroundColor: category.color 
+                            }
                           ]}
                         />
                       </View>
-                      <Text style={styles.percentText}>{category.percent}%</Text>
+                      <Text style={[styles.percentText, { color: colors.textSecondary }]}>
+                        {category.percent}%
+                      </Text>
                     </View>
                   </View>
                 ))}
 
-                {/* Summary */}
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryBoxTitle}>Nhận xét</Text>
-                  <Text style={styles.summaryBoxText}>
+                <View style={[
+                  styles.summaryBox,
+                  { backgroundColor: isDarkMode ? colors.primary + '20' : '#DBEAFE' }
+                ]}>
+                  <Text style={[styles.summaryBoxTitle, { color: colors.text }]}>
+                    Nhận xét
+                  </Text>
+                  <Text style={[styles.summaryBoxText, { color: colors.textSecondary }]}>
                     {currentReport.trend === 'up' ? (
                       `Chi tiêu tuần này tăng ${currentReport.comparison} so với tuần trước. ${
                         currentReport.categories[0]
@@ -230,18 +257,15 @@ export default function PeriodicExpenseReport() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#6B7280',
   },
   content: {
     padding: 16,
@@ -253,10 +277,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
   },
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
@@ -269,7 +291,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#374151',
     marginBottom: 16,
   },
   periodGrid: {
@@ -282,29 +303,21 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
   },
-  periodButtonActive: {
-    borderColor: '#EC4899',
-    backgroundColor: '#FDF2F8',
-  },
+  periodButtonActive: {},
   periodLabel: {
     fontSize: 12,
-    color: '#6B7280',
     marginBottom: 4,
   },
   periodDate: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
   },
   activeDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#EC4899',
     marginTop: 8,
   },
   notificationContainer: {
@@ -312,13 +325,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: '#F9FAFB',
     borderRadius: 12,
   },
   notificationText: {
     flex: 1,
     fontSize: 14,
-    color: '#374151',
     marginRight: 12,
   },
   summaryGrid: {
@@ -371,11 +382,9 @@ const styles = StyleSheet.create({
   categoryName: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#374151',
   },
   categoryAmount: {
     fontSize: 15,
-    color: '#6B7280',
   },
   progressContainer: {
     flexDirection: 'row',
@@ -385,7 +394,6 @@ const styles = StyleSheet.create({
   progressBar: {
     flex: 1,
     height: 12,
-    backgroundColor: '#E5E7EB',
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -395,12 +403,10 @@ const styles = StyleSheet.create({
   },
   percentText: {
     fontSize: 12,
-    color: '#6B7280',
     width: 40,
     textAlign: 'right',
   },
   summaryBox: {
-    backgroundColor: '#DBEAFE',
     borderRadius: 12,
     padding: 16,
     marginTop: 8,
@@ -408,12 +414,10 @@ const styles = StyleSheet.create({
   summaryBoxTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#374151',
     marginBottom: 8,
   },
   summaryBoxText: {
     fontSize: 13,
-    color: '#6B7280',
     lineHeight: 20,
   },
   emptyState: {
@@ -422,7 +426,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#9CA3AF',
     textAlign: 'center',
   },
 });

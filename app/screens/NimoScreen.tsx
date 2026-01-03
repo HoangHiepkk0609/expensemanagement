@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useTheme } from '../theme/themeContext'; // ✅ Import useTheme
+import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../theme/themeContext';
+import ChatService, { ChatMessage } from '../services/ChatService'; 
 
-const GEMINI_API_KEY = "AIzaSyCpfAXfGmAvEosiOu5693ZH73NQDVZOGww"; 
+const GEMINI_API_KEY = "AIzaSyCit9J3FKe-v0iXaBGG00VCvHIJQAkV1c0"; 
 
-const INITIAL_MESSAGE = {
+
+const INITIAL_MESSAGE: ChatMessage = {
   id: 1,
   role: 'model',
   text: 'Chào bạn, Nimo đã sẵn sàng hỗ trợ bạn rồi đây ✨\n\n"Nimo luôn theo sát ví tiền của bạn – có gì bất thường, mình sẽ báo liền!"'
@@ -26,60 +28,52 @@ const INITIAL_MESSAGE = {
 
 const NimoScreen = () => {
   const navigation = useNavigation<any>();
-  const { colors, isDarkMode } = useTheme(); // ✅ Lấy colors
+  const { colors, isDarkMode } = useTheme();
   
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const [messages, setMessages] = useState([INITIAL_MESSAGE]);
+  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
+
 
   React.useLayoutEffect(() => {
-    navigation.setOptions({
-      tabBarStyle: { display: 'none' },
-    });
-    return () => {
-      navigation.setOptions({
-        tabBarStyle: { display: 'flex' },
-      });
-    };
+    navigation.setOptions({ tabBarStyle: { display: 'none' } });
+    return () => { navigation.setOptions({ tabBarStyle: { display: 'flex' } }); };
   }, [navigation]);
 
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
+  useEffect(() => {
+    const unsubscribe = ChatService.subscribeToChat((firestoreMessages) => {
+      if (firestoreMessages && firestoreMessages.length > 0) {
+        setMessages(firestoreMessages);
+      } else {
+     
         setMessages([INITIAL_MESSAGE]);
-        setInputText('');
-      };
-    }, [])
-  );
+      }
+      
+  
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleReset = () => {
     Alert.alert(
       "Xóa đoạn chat", 
-      "Bạn muốn bắt đầu cuộc trò chuyện mới?",
+      "Toàn bộ lịch sử trò chuyện sẽ bị xóa vĩnh viễn?",
       [
         { text: "Hủy", style: "cancel" },
         { 
           text: "Đồng ý", 
-          onPress: () => {
+          style: 'destructive',
+          onPress: async () => {
+            await ChatService.clearChat();
             setMessages([INITIAL_MESSAGE]);
             setInputText('');
           }
         }
       ]
     );
-  };
-
-  const handleTransaction = (data: any) => {
-    navigation.navigate('AddTransaction', {
-      nimoData: {
-        amount: data.amount,
-        category: data.category,
-        note: data.note,
-        date: new Date().toISOString(),
-        type: 'expense'
-      }
-    });
   };
 
   const suggestions = [
@@ -91,12 +85,14 @@ const NimoScreen = () => {
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim()) return;
 
-    const userMsg = { id: Date.now(), role: 'user', text: messageText };
-    setMessages(prev => [...prev, userMsg]);
+
+    const userMsg: ChatMessage = { id: Date.now(), role: 'user', text: messageText };
+    
+ 
+    await ChatService.addMessage(userMsg);
+    
     setInputText('');
     setLoading(true);
-
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -134,47 +130,43 @@ const NimoScreen = () => {
         const data = JSON.parse(text);
 
         if (data.isTransaction) {
-           console.log("Phát hiện giao dịch, đang chuyển màn hình...", data);
-           
-           navigation.navigate('AddTransactionModal', { 
-             nimoData: data 
-           });
+       
+           navigation.navigate('AddTransactionModal', { nimoData: data });
         }
 
-        const botMsg = { id: Date.now() + 1, role: 'model', text: data.reply || text };
-        setMessages(prev => [...prev, botMsg]);
+
+        const botMsg: ChatMessage = { id: Date.now() + 1, role: 'model', text: data.reply || text };
+        
+
+        await ChatService.addMessage(botMsg);
 
       } catch (parseError) {
-        console.log("Lỗi đọc JSON:", parseError);
-        const botMsg = { id: Date.now() + 1, role: 'model', text: text };
-        setMessages(prev => [...prev, botMsg]);
+
+        const botMsg: ChatMessage = { id: Date.now() + 1, role: 'model', text: text };
+        await ChatService.addMessage(botMsg);
       }
 
     } catch (error: any) {
       console.error("Lỗi API:", error);
-      
       let errorMessage = "Nimo đang bị mất kết nối xíu, thử lại sau nha! 🤕";
       
       if (error?.message?.includes('429') || error?.message?.includes('quota')) {
-        errorMessage = "Nimo đã dùng hết quota hôm nay rồi 😢\n\nBạn có thể:\n• Đợi 1 phút rồi thử lại\n• Hoặc tạo API key mới tại:\naistudio.google.com/app/apikey";
+        errorMessage = "Nimo đã dùng hết quota hôm nay rồi 😢";
       }
       
-      const errorMsg = { 
-        id: Date.now() + 1, 
-        role: 'model', 
-        text: errorMessage 
-      };
-      setMessages(prev => [...prev, errorMsg]);
+
+      const errorMsg: ChatMessage = { id: Date.now() + 1, role: 'model', text: errorMessage };
+      await ChatService.addMessage(errorMsg); 
+      
     } finally {
       setLoading(false);
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { backgroundColor: isDarkMode ? colors.surface : '#FFD6E8'}]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
           <Icon name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -183,7 +175,7 @@ const NimoScreen = () => {
         
         <View style={styles.headerIcons}>
           <TouchableOpacity onPress={handleReset} style={styles.headerButton}>
-            <Icon name="refresh" size={24} color={colors.text} />
+            <Icon name="trash-can-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -199,8 +191,9 @@ const NimoScreen = () => {
           contentContainerStyle={{ paddingBottom: 20 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
-          {/* Greeting Card - Chỉ hiện khi mới vào */}
+     
           {messages.length <= 1 && (
             <>
               <View style={[styles.greetingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -215,7 +208,7 @@ const NimoScreen = () => {
                 </Text>
               </View>
 
-              {/* Suggestions */}
+           
               <View style={styles.suggestionsContainer}>
                 {suggestions.map((item, index) => (
                   <TouchableOpacity 
@@ -231,12 +224,13 @@ const NimoScreen = () => {
             </>
           )}
 
-          {/* Messages */}
-          {messages.map((msg) => {
+ 
+          {messages.map((msg, index) => {
+
              if (msg.id === 1 && messages.length > 1) return null; 
 
              return (
-              <View key={msg.id} style={[
+              <View key={msg.id || index} style={[
                 styles.messageBubble,
                 msg.role === 'user' ? styles.userBubble : styles.botBubble
               ]}>
@@ -263,7 +257,6 @@ const NimoScreen = () => {
              );
           })}
 
-          {/* Loading Indicator */}
           {loading && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={colors.primary} />
@@ -274,7 +267,6 @@ const NimoScreen = () => {
           )}
         </ScrollView>
 
-        {/* Input Area */}
         <View style={[
           styles.inputContainer, 
           { 
